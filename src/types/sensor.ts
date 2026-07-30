@@ -1,3 +1,4 @@
+// types/sensor.ts
 // Tipe data ini mengikuti struktur variabel pada firmware ESP32
 // (RTC DS3231, BME280, MQ135, threshold status di updateStatus()).
 export type AirStatus = "AMAN" | "WASPADA" | "BAHAYA";

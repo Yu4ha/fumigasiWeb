@@ -8,6 +8,12 @@
 // - apiBase WAJIB diisi URL relay server yang sesungguhnya (mis. dari
 //   VITE_RELAY_URL / import.meta.env), BUKAN dikosongkan, kecuali web dan
 //   server memang di-serve dari origin yang sama persis.
+//
+// CATATAN VOLUME/GAS:
+// - container_volume_m3 & total_gas_grams TIDAK dikirim oleh API (bukan
+//   kolom DB), makanya dihitung ulang di sini dari container_p/l/t +
+//   initial_dose yang memang ada di SessionRow. container_p/l/t sudah
+//   dalam satuan meter (sesuai form "Dimensi Container P x L x T (meter)").
 
 type GasStatus = "AMAN" | "PERHATIAN" | "KRITIS";
 
@@ -50,6 +56,22 @@ interface ReadingRow {
     max_c: number;
     status: GasStatus;
     created_at: string;
+}
+
+/** Volume kontainer (m3) dari P/L/T dalam meter. Null kalau salah satu dimensi belum diisi. */
+function computeVolumeM3(
+    p: number | null,
+    l: number | null,
+    t: number | null
+): number | null {
+    if (p == null || l == null || t == null) return null;
+    return p * l * t;
+}
+
+/** Total gas (gram) = dosis (g/m3) x volume (m3). Null kalau volume belum diketahui. */
+function computeTotalGasGrams(doseGm3: number, volumeM3: number | null): number | null {
+    if (volumeM3 == null) return null;
+    return doseGm3 * volumeM3;
 }
 
 function fmtDate(iso: string | null): string {
@@ -104,10 +126,32 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
           </div>
 
           <div class="fw-form-row">
-            <label>Takaran Gas</label>
-            <div class="fw-form-cols">
-              <input name="initialDose" type="number" step="0.01" placeholder="Dosis awal (g/m3)" required />
-              <input name="margin" type="number" step="0.01" placeholder="Margin (default 5)" value="5" />
+            <label for="fw-dose">Takaran Gas (Dosis Standar, g/m³)</label>
+            <select id="fw-dose" name="initialDose" required>
+              <option value="" disabled selected>Pilih dosis...</option>
+              <option value="32">32 g/m³</option>
+              <option value="40">40 g/m³</option>
+              <option value="48">48 g/m³</option>
+              <option value="56">56 g/m³</option>
+              <option value="64">64 g/m³</option>
+              <option value="72">72 g/m³</option>
+              <option value="80">80 g/m³</option>
+              <option value="88">88 g/m³</option>
+              <option value="96">96 g/m³</option>
+              <option value="104">104 g/m³</option>
+              <option value="128">128 g/m³</option>
+              <option value="136">136 g/m³</option>
+              <option value="144">144 g/m³</option>
+              <option value="152">152 g/m³</option>
+            </select>
+          </div>
+
+          <div class="fw-form-row fw-computed-box">
+            <div>Volume container: <b id="fw-computed-volume">-</b> m³</div>
+            <div>Total gas dibutuhkan: <b id="fw-computed-gas">-</b> gram</div>
+            <div class="fw-computed-hint">
+              Dosis (g/m³) dipakai sebagai acuan ambang batas AMAN/PERHATIAN/KRITIS.
+              Total gas (gram) cuma info bantu takaran fisik, dihitung otomatis dari Dosis × Volume.
             </div>
           </div>
 
@@ -172,6 +216,29 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
     const filterForm = root.querySelector<HTMLFormElement>("#fw-filter-form")!;
     const filterSessionSelect = root.querySelector<HTMLSelectElement>("#fw-filter-session")!;
     const filterResults = root.querySelector<HTMLDivElement>("#fw-filter-results")!;
+    const volumeOut = root.querySelector<HTMLElement>("#fw-computed-volume")!;
+    const gasOut = root.querySelector<HTMLElement>("#fw-computed-gas")!;
+
+    function recomputeVolumeAndGas(): void {
+        const fd = new FormData(form);
+        const p = Number(fd.get("containerP"));
+        const l = Number(fd.get("containerL"));
+        const t = Number(fd.get("containerT"));
+        const dose = Number(fd.get("initialDose"));
+
+        if (p > 0 && l > 0 && t > 0) {
+            const volume = p * l * t;
+            volumeOut.textContent = volume.toFixed(4);
+            gasOut.textContent = dose > 0 ? (dose * volume).toFixed(3) : "-";
+        } else {
+            volumeOut.textContent = "-";
+            gasOut.textContent = "-";
+        }
+    }
+
+    form.querySelectorAll('[name="containerP"], [name="containerL"], [name="containerT"], [name="initialDose"]').forEach(
+        (input) => input.addEventListener("input", recomputeVolumeAndGas)
+    );
 
     async function refreshList(): Promise<void> {
         listEl.textContent = "Memuat...";
@@ -214,6 +281,9 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
                     ? `${s.container_p ?? "-"} x ${s.container_l ?? "-"} x ${s.container_t ?? "-"} m`
                     : "-";
 
+            const volume = computeVolumeM3(s.container_p, s.container_l, s.container_t);
+            const totalGas = computeTotalGasGrams(s.initial_dose, volume);
+
             card.innerHTML = `
         <div class="fw-session-card-head">
           <span class="fw-session-id">#${s.id}${s.label ? " · " + escapeHtml(s.label) : ""}</span>
@@ -227,7 +297,10 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
             )} / ${escapeHtml(s.operator_helper2 ?? "-")}</div>
           <div><b>Lokasi:</b> ${escapeHtml(s.location ?? "-")}</div>
           <div><b>Kontainer (PxLxT):</b> ${dims}</div>
-          <div><b>Takaran gas:</b> ${s.initial_dose} (margin ±${s.margin})</div>
+          <div><b>Volume:</b> ${volume !== null ? volume.toFixed(4) : "-"} m³ · <b>Total gas:</b> ${
+                totalGas !== null ? totalGas.toFixed(3) : "-"
+            } gram</div>
+          <div><b>Takaran gas:</b> ${s.initial_dose} g/m³ (margin ±${s.margin})</div>
           <div><b>Mulai:</b> ${fmtDate(s.start_point_at)}</div>
           <div><b>Selesai:</b> ${fmtDate(s.ended_at)}</div>
         </div>
@@ -423,7 +496,6 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
         const body = {
             label: String(fd.get("label") || "") || undefined,
             initialDose: Number(fd.get("initialDose")),
-            margin: Number(fd.get("margin") || 5),
             operatorSupervisor: String(fd.get("operatorSupervisor") || "") || undefined,
             operatorHelper1: String(fd.get("operatorHelper1") || "") || undefined,
             operatorHelper2: String(fd.get("operatorHelper2") || "") || undefined,
@@ -434,7 +506,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
         };
 
         if (!body.initialDose || Number.isNaN(body.initialDose)) {
-            formMsg.textContent = "Takaran gas wajib diisi angka.";
+            formMsg.textContent = "Takaran gas wajib dipilih.";
             formMsg.className = "fw-form-msg is-error";
             return;
         }
@@ -449,7 +521,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
             formMsg.textContent = "Sesi berhasil dimulai.";
             formMsg.className = "fw-form-msg is-ok";
             form.reset();
-            (form.querySelector('[name="margin"]') as HTMLInputElement).value = "5";
+            recomputeVolumeAndGas();
             await refreshList();
         } catch (err) {
             formMsg.textContent = "Gagal memulai sesi. Cek koneksi ke server.";
