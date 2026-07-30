@@ -5,11 +5,9 @@
 // CATATAN INTEGRASI:
 // - Modul ini fetch langsung ke relay server (tidak lewat DeviceDataConnection),
 //   karena datanya historis (PostgreSQL), bukan snapshot realtime.
-// - Ganti API_BASE di bawah kalau relay server-mu tidak satu origin dengan
-//   frontend (mis. pakai normalizeRelayUrl() yang sudah ada di deviceData.ts).
-// - Panggil mountFumigationReport(root) dari main.ts di route/tab halaman ini.
-
-const API_BASE = ""; // "" = same origin. Ganti mis. "http://localhost:3000" kalau beda origin.
+// - apiBase WAJIB diisi URL relay server yang sesungguhnya (mis. dari
+//   VITE_RELAY_URL / import.meta.env), BUKAN dikosongkan, kecuali web dan
+//   server memang di-serve dari origin yang sama persis.
 
 type GasStatus = "AMAN" | "PERHATIAN" | "KRITIS";
 
@@ -65,7 +63,11 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string): HTMLEl
     return node;
 }
 
-export function mountFumigationReport(root: HTMLElement): void {
+// Kalau relay server diakses lewat tunnel ngrok, ngrok nampilin halaman
+// warning HTML ke request browser biasa (bukan JSON) kecuali header ini ada.
+const NGROK_HEADERS = { "ngrok-skip-browser-warning": "true" } as const;
+
+export function mountFumigationReport(root: HTMLElement, apiBase: string): void {
     root.innerHTML = `
     <div class="fw-dash fw-report">
       <header class="fw-titlebar">
@@ -174,7 +176,7 @@ export function mountFumigationReport(root: HTMLElement): void {
     async function refreshList(): Promise<void> {
         listEl.textContent = "Memuat...";
         try {
-            const res = await fetch(`${API_BASE}/api/sessions`);
+            const res = await fetch(`${apiBase}/api/sessions`, { headers: NGROK_HEADERS });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const sessions: SessionRow[] = await res.json();
             renderList(sessions);
@@ -231,7 +233,7 @@ export function mountFumigationReport(root: HTMLElement): void {
         </div>
         <div class="fw-session-card-actions">
           <button class="fw-btn fw-btn-small" data-action="detail" data-id="${s.id}">Lihat Laporan</button>
-          <a class="fw-btn fw-btn-small" href="${API_BASE}/api/sessions/${s.id}/report/pdf" target="_blank" rel="noopener">Cetak PDF</a>
+          <button class="fw-btn fw-btn-small" data-action="pdf" data-id="${s.id}">Cetak PDF</button>
           ${
               s.is_active
                   ? `<button class="fw-btn fw-btn-small fw-btn-danger" data-action="stop" data-id="${s.id}">Hentikan Sesi</button>`
@@ -252,7 +254,10 @@ export function mountFumigationReport(root: HTMLElement): void {
         if (action === "stop") {
             if (!confirm(`Hentikan sesi #${id}?`)) return;
             try {
-                const res = await fetch(`${API_BASE}/api/sessions/${id}/stop`, { method: "POST" });
+                const res = await fetch(`${apiBase}/api/sessions/${id}/stop`, {
+                    method: "POST",
+                    headers: NGROK_HEADERS,
+                });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 await refreshList();
             } catch (err) {
@@ -264,6 +269,30 @@ export function mountFumigationReport(root: HTMLElement): void {
         if (action === "detail") {
             await showDetail(id);
         }
+
+        if (action === "pdf") {
+            const btn = target as HTMLButtonElement;
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = "Menyiapkan PDF...";
+            try {
+                const res = await fetch(`${apiBase}/api/sessions/${id}/report/pdf`, {
+                    headers: NGROK_HEADERS,
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                window.open(url, "_blank", "noopener");
+                // beri jeda sebelum revoke supaya tab baru sempat memuat filenya
+                setTimeout(() => URL.revokeObjectURL(url), 30000);
+            } catch (err) {
+                alert("Gagal membuka PDF.");
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
     });
 
     async function showDetail(id: number): Promise<void> {
@@ -273,7 +302,7 @@ export function mountFumigationReport(root: HTMLElement): void {
         detailPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 
         try {
-            const res = await fetch(`${API_BASE}/api/sessions/${id}/report`);
+            const res = await fetch(`${apiBase}/api/sessions/${id}/report`, { headers: NGROK_HEADERS });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data: { summary: SessionSummary; readings: ReadingRow[] } = await res.json();
             renderDetail(data.summary, data.readings);
@@ -341,7 +370,9 @@ export function mountFumigationReport(root: HTMLElement): void {
         }
 
         try {
-            const res = await fetch(`${API_BASE}/api/readings?${params.toString()}`);
+            const res = await fetch(`${apiBase}/api/readings?${params.toString()}`, {
+                headers: NGROK_HEADERS,
+            });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const readings: ReadingRow[] = await res.json();
             renderFilterResults(readings);
@@ -409,9 +440,9 @@ export function mountFumigationReport(root: HTMLElement): void {
         }
 
         try {
-            const res = await fetch(`${API_BASE}/api/sessions/start`, {
+            const res = await fetch(`${apiBase}/api/sessions/start`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", ...NGROK_HEADERS },
                 body: JSON.stringify(body),
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);

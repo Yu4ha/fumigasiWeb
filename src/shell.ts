@@ -5,9 +5,9 @@
 // Di main.ts kamu, ganti pemanggilan langsung:
 //     mountDashboard(root, connection, mode);
 // menjadi:
-//     mountApp(root, connection, mode);
-// Import & setup DeviceDataConnection tetap sama seperti sekarang, cuma
-// dioper ke sini.
+//     mountApp(root, connection, mode, apiBase);
+// apiBase = URL relay server sesungguhnya (mis. import.meta.env.VITE_RELAY_URL),
+// WAJIB diisi kalau web (Vite) dan server (Node) beda origin/port.
 
 import { mountDashboard } from "./dashboard.js";
 import { mountFumigationReport } from "./report.js";
@@ -15,7 +15,12 @@ import type { DeviceDataConnection, DeviceMode } from "./deviceData.js";
 
 type TabKey = "dashboard" | "report";
 
-export function mountApp(root: HTMLElement, connection: DeviceDataConnection, mode: DeviceMode): void {
+export function mountApp(
+    root: HTMLElement,
+    connection: DeviceDataConnection,
+    mode: DeviceMode,
+    apiBase: string
+): void {
     root.innerHTML = `
     <div class="fw-shell">
       <nav class="fw-tabs">
@@ -37,7 +42,7 @@ export function mountApp(root: HTMLElement, connection: DeviceDataConnection, mo
         if (tab === "dashboard") {
             mountDashboard(content, connection, mode);
         } else {
-            mountFumigationReport(content);
+            mountFumigationReport(content, apiBase);
         }
     }
 
