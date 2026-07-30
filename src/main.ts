@@ -1,6 +1,8 @@
-import { mountDashboard } from "./dashboard";
+import { mountApp } from "./shell";
 import { DeviceDataConnection, type DeviceMode } from "./deviceData";
 import "./style.css";
+import "./report.css"
+import "./shell.css"
 
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -14,5 +16,5 @@ const DEFAULT_RELAY_URL: string | undefined = import.meta.env.VITE_RELAY_URL;
 const mode: DeviceMode = DEFAULT_RELAY_URL ? "live" : "simulated";
 
 const connection = new DeviceDataConnection(mode, DEFAULT_RELAY_URL);
-mountDashboard(root, connection, mode);
+mountApp(root, connection, mode);
 connection.start();

@@ -1,0 +1,201 @@
+/* ============================================================
+   Tambahan untuk halaman Riwayat & Laporan Fumigasi (report.ts)
+   Tempel di akhir style.css. Menyesuaikan penamaan class fw-*
+   yang sudah dipakai dashboard.ts.
+   ============================================================ */
+
+.fw-panel-form,
+.fw-panel-history,
+.fw-panel-detail {
+    margin-top: 16px;
+}
+
+.fw-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.fw-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fw-form-row label {
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+.fw-form-cols {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.fw-form-cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.fw-form input {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 0.95rem;
+}
+
+.fw-form select {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 0.95rem;
+    background: #fff;
+}
+
+.fw-filter-form {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+}
+
+.fw-filter-form .fw-form-row {
+    min-width: 160px;
+}
+
+.fw-panel-filter #fw-filter-results {
+    margin-top: 14px;
+}
+
+.fw-btn {
+    display: inline-block;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-decoration: none;
+    text-align: center;
+}
+
+.fw-btn-primary {
+    background: #1f4e79;
+    color: #fff;
+    width: fit-content;
+}
+
+.fw-btn-small {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    background: #eee;
+    color: #222;
+}
+
+.fw-btn-danger {
+    background: #c0392b;
+    color: #fff;
+}
+
+.fw-form-msg {
+    font-size: 0.85rem;
+}
+
+.fw-form-msg.is-ok {
+    color: #1e7e34;
+}
+
+.fw-form-msg.is-error {
+    color: #c0392b;
+}
+
+.fw-session-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.fw-session-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px 14px;
+}
+
+.fw-session-card.is-active {
+    border-color: #1f4e79;
+    background: #f3f8fc;
+}
+
+.fw-session-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.fw-session-id {
+    font-weight: 600;
+}
+
+.fw-session-badge {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.badge-active {
+    background: #d4edda;
+    color: #1e7e34;
+}
+
+.badge-ended {
+    background: #e2e3e5;
+    color: #555;
+}
+
+.fw-session-card-body {
+    font-size: 0.88rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 8px;
+}
+
+.fw-session-card-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.fw-detail-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+    font-size: 0.9rem;
+}
+
+.fw-detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.fw-detail-table th,
+.fw-detail-table td {
+    border: 1px solid #ddd;
+    padding: 6px 8px;
+    text-align: left;
+}
+
+.fw-detail-table tr.row-kritis td {
+    background: #fdecea;
+}
+
+.fw-detail-table tr.row-perhatian td {
+    background: #fff8e1;
+}
+
+.fw-detail-table tr.row-aman td {
+    background: #eafaf1;
+}
