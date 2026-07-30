@@ -1,6 +1,8 @@
 import { mountApp } from "./shell";
 import { DeviceDataConnection, type DeviceMode } from "./deviceData";
 import "./style.css";
+import "./shell.css";
+import "./report.css";
 
 
 const root = document.querySelector<HTMLDivElement>("#app");
