@@ -1,201 +1,478 @@
-/* ============================================================
-   Tambahan untuk halaman Riwayat & Laporan Fumigasi (report.ts)
-   Tempel di akhir style.css. Menyesuaikan penamaan class fw-*
-   yang sudah dipakai dashboard.ts.
-   ============================================================ */
+/* ==========================================================================
+   report.css — FumigasiWEB / Riwayat & Laporan Fumigasi
+   Arah desain: panel instrumentasi gas industri. Bukan dashboard SaaS biasa
+   dibikin gelap seperti kokpit alat ukur, aksen amber sebagai warna "hazard"
+   dan status AMAN/PERHATIAN/KRITIS memakai palet lampu indikator gas
+   detector sungguhan (hijau/amber/merah), angka penting selalu monospace
+   biar terasa seperti readout instrumen, bukan teks biasa.
+   ========================================================================== */
 
-.fw-panel-form,
-.fw-panel-history,
-.fw-panel-detail {
-    margin-top: 16px;
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+:root {
+    --fw-bg: #0f1215;
+    --fw-bg-raised: #171b1f;
+    --fw-bg-panel: #1a1f24;
+    --fw-bg-inset: #12161a;
+    --fw-border: #2a3238;
+    --fw-border-soft: #23292e;
+
+    --fw-text: #e7ebee;
+    --fw-text-dim: #9aa5ac;
+    --fw-text-faint: #647079;
+
+    --fw-amber: #f0a83c;
+    --fw-amber-dim: #a97730;
+    --fw-safe: #4ec98a;
+    --fw-warn: #f0a83c;
+    --fw-crit: #e2564f;
+
+    --fw-safe-bg: rgba(78, 201, 138, 0.12);
+    --fw-warn-bg: rgba(240, 168, 60, 0.12);
+    --fw-crit-bg: rgba(226, 86, 79, 0.12);
+
+    --fw-font-display: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+    --fw-font-body: "IBM Plex Sans", system-ui, sans-serif;
+
+    --fw-radius: 3px;
+    --fw-gap: 20px;
 }
 
-.fw-form {
+.fw-dash.fw-report {
+    background: var(--fw-bg);
+    color: var(--fw-text);
+    font-family: var(--fw-font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 28px clamp(16px, 4vw, 40px) 64px;
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+.fw-dash.fw-report * {
+    box-sizing: border-box;
+}
+
+/* ---------- Title bar ---------- */
+
+.fw-titlebar {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 20px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--fw-border);
+    position: relative;
 }
+
+.fw-titlebar::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 120px;
+    height: 2px;
+    background: repeating-linear-gradient(
+        135deg,
+        var(--fw-amber) 0 8px,
+        #17191b 8px 16px
+    );
+}
+
+.fw-titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.fw-plate {
+    font-family: var(--fw-font-display);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--fw-bg);
+    background: var(--fw-amber);
+    padding: 5px 9px;
+    border-radius: var(--fw-radius);
+}
+
+.fw-titlebar h1 {
+    font-family: var(--fw-font-display);
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    color: var(--fw-text);
+}
+
+/* ---------- Panels ---------- */
+
+.fw-panel {
+    background: var(--fw-bg-panel);
+    border: 1px solid var(--fw-border);
+    border-radius: var(--fw-radius);
+    padding: 24px clamp(16px, 3vw, 28px);
+    margin-bottom: var(--fw-gap);
+}
+
+.fw-panel h2 {
+    font-family: var(--fw-font-display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fw-text-dim);
+    margin: 0 0 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--fw-border-soft);
+}
+
+/* ---------- Form ---------- */
 
 .fw-form-row {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    margin-bottom: 16px;
 }
 
-.fw-form-row label {
-    font-size: 0.85rem;
-    opacity: 0.8;
+.fw-form-row > label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--fw-text-dim);
+    margin-bottom: 7px;
 }
 
 .fw-form-cols {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
 }
 
 .fw-form-cols-3 {
     grid-template-columns: repeat(3, 1fr);
 }
 
-.fw-form input {
-    padding: 8px 10px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    font-size: 0.95rem;
+.fw-form input,
+.fw-form select {
+    width: 100%;
+    background: var(--fw-bg-inset);
+    border: 1px solid var(--fw-border);
+    border-radius: var(--fw-radius);
+    color: var(--fw-text);
+    font-family: var(--fw-font-body);
+    font-size: 13.5px;
+    padding: 9px 11px;
+    transition: border-color 120ms ease, background 120ms ease;
+}
+
+.fw-form input::placeholder {
+    color: var(--fw-text-faint);
+}
+
+.fw-form input:hover,
+.fw-form select:hover {
+    border-color: #3a444c;
+}
+
+.fw-form input:focus,
+.fw-form select:focus {
+    outline: none;
+    border-color: var(--fw-amber);
+    background: var(--fw-bg-raised);
+    box-shadow: 0 0 0 3px rgba(240, 168, 60, 0.15);
 }
 
 .fw-form select {
-    padding: 8px 10px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    font-size: 0.95rem;
-    background: #fff;
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--fw-text-dim) 50%),
+        linear-gradient(135deg, var(--fw-text-dim) 50%, transparent 50%);
+    background-position: calc(100% - 16px) center, calc(100% - 11px) center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 32px;
 }
 
-.fw-filter-form {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 16px;
+/* Computed readout box: styled like an instrument display */
+.fw-computed-box {
+    background: var(--fw-bg-inset);
+    border: 1px solid var(--fw-border-soft);
+    border-left: 3px solid var(--fw-amber);
+    border-radius: var(--fw-radius);
+    padding: 14px 16px;
+    font-family: var(--fw-font-display);
+    font-size: 13px;
+    color: var(--fw-text-dim);
 }
 
-.fw-filter-form .fw-form-row {
-    min-width: 160px;
+.fw-computed-box div {
+    margin-bottom: 4px;
 }
 
-.fw-panel-filter #fw-filter-results {
-    margin-top: 14px;
+.fw-computed-box b {
+    color: var(--fw-amber);
+    font-weight: 600;
 }
+
+.fw-computed-hint {
+    font-family: var(--fw-font-body);
+    font-size: 12px;
+    color: var(--fw-text-faint);
+    margin-top: 8px !important;
+    line-height: 1.5;
+}
+
+/* ---------- Buttons ---------- */
 
 .fw-btn {
-    display: inline-block;
-    padding: 8px 14px;
-    border-radius: 6px;
-    border: none;
+    font-family: var(--fw-font-body);
+    font-weight: 600;
+    font-size: 13px;
+    border-radius: var(--fw-radius);
+    border: 1px solid var(--fw-border);
+    background: var(--fw-bg-inset);
+    color: var(--fw-text);
+    padding: 10px 18px;
     cursor: pointer;
-    font-size: 0.9rem;
-    text-decoration: none;
-    text-align: center;
+    transition: border-color 120ms ease, background 120ms ease, transform 60ms ease;
+}
+
+.fw-btn:hover {
+    border-color: #3a444c;
+    background: var(--fw-bg-raised);
+}
+
+.fw-btn:active {
+    transform: translateY(1px);
 }
 
 .fw-btn-primary {
-    background: #1f4e79;
-    color: #fff;
-    width: fit-content;
+    background: var(--fw-amber);
+    border-color: var(--fw-amber);
+    color: #1a1305;
+}
+
+.fw-btn-primary:hover {
+    background: #f5b455;
+    border-color: #f5b455;
 }
 
 .fw-btn-small {
-    padding: 5px 10px;
-    font-size: 0.8rem;
-    background: #eee;
-    color: #222;
+    padding: 6px 12px;
+    font-size: 12px;
 }
 
 .fw-btn-danger {
-    background: #c0392b;
-    color: #fff;
+    background: transparent;
+    border-color: var(--fw-crit);
+    color: var(--fw-crit);
+}
+
+.fw-btn-danger:hover {
+    background: var(--fw-crit-bg);
 }
 
 .fw-form-msg {
-    font-size: 0.85rem;
+    display: inline-block;
+    margin-left: 12px;
+    font-size: 12.5px;
+    color: var(--fw-text-dim);
 }
 
 .fw-form-msg.is-ok {
-    color: #1e7e34;
+    color: var(--fw-safe);
 }
 
 .fw-form-msg.is-error {
-    color: #c0392b;
+    color: var(--fw-crit);
 }
+
+/* ---------- Session list / cards ---------- */
 
 .fw-session-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 .fw-session-card {
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 12px 14px;
+    background: var(--fw-bg-inset);
+    border: 1px solid var(--fw-border-soft);
+    border-left: 3px solid var(--fw-border);
+    border-radius: var(--fw-radius);
+    padding: 16px 18px;
+    transition: border-color 150ms ease;
 }
 
 .fw-session-card.is-active {
-    border-color: #1f4e79;
-    background: #f3f8fc;
+    border-left-color: var(--fw-safe);
 }
 
 .fw-session-card-head {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 6px;
+    justify-content: space-between;
+    margin-bottom: 10px;
 }
 
 .fw-session-id {
+    font-family: var(--fw-font-display);
     font-weight: 600;
+    font-size: 13.5px;
+    color: var(--fw-text);
 }
 
 .fw-session-badge {
-    font-size: 0.72rem;
-    padding: 2px 8px;
-    border-radius: 12px;
+    font-family: var(--fw-font-display);
+    font-size: 10.5px;
     font-weight: 600;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 999px;
 }
 
 .badge-active {
-    background: #d4edda;
-    color: #1e7e34;
+    color: var(--fw-safe);
+    background: var(--fw-safe-bg);
+    border: 1px solid rgba(78, 201, 138, 0.35);
 }
 
 .badge-ended {
-    background: #e2e3e5;
-    color: #555;
+    color: var(--fw-text-faint);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--fw-border);
 }
 
 .fw-session-card-body {
-    font-size: 0.88rem;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-bottom: 8px;
+    display: grid;
+    gap: 5px;
+    font-size: 13px;
+    color: var(--fw-text-dim);
+}
+
+.fw-session-card-body b {
+    color: var(--fw-text);
+    font-weight: 500;
 }
 
 .fw-session-card-actions {
     display: flex;
     gap: 8px;
-    flex-wrap: wrap;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--fw-border-soft);
+}
+
+/* ---------- Filter panel ---------- */
+
+.fw-filter-form {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    align-items: end;
+}
+
+.fw-filter-form .fw-btn {
+    grid-column: 3;
+}
+
+#fw-filter-results {
+    margin-top: 18px;
+}
+
+/* ---------- Detail panel ---------- */
+
+.fw-panel-detail h2 {
+    font-family: var(--fw-font-display);
 }
 
 .fw-detail-summary {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-bottom: 12px;
-    font-size: 0.9rem;
+    display: grid;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--fw-text-dim);
+    margin-bottom: 18px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--fw-border-soft);
 }
+
+.fw-detail-summary b {
+    color: var(--fw-text);
+    font-family: var(--fw-font-display);
+    font-weight: 600;
+}
+
+/* ---------- Data tables ---------- */
 
 .fw-detail-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.85rem;
+    font-family: var(--fw-font-display);
+    font-size: 12.5px;
 }
 
-.fw-detail-table th,
-.fw-detail-table td {
-    border: 1px solid #ddd;
-    padding: 6px 8px;
+.fw-detail-table thead th {
     text-align: left;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    color: var(--fw-text-faint);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--fw-border);
 }
 
-.fw-detail-table tr.row-kritis td {
-    background: #fdecea;
+.fw-detail-table tbody td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--fw-border-soft);
+    color: var(--fw-text-dim);
 }
 
-.fw-detail-table tr.row-perhatian td {
-    background: #fff8e1;
+.fw-detail-table tbody tr:hover td {
+    background: var(--fw-bg-raised);
 }
 
-.fw-detail-table tr.row-aman td {
-    background: #eafaf1;
+.fw-detail-table tr.row-aman td:last-child {
+    color: var(--fw-safe);
+    font-weight: 600;
+}
+
+.fw-detail-table tr.row-perhatian td:last-child {
+    color: var(--fw-warn);
+    font-weight: 600;
+}
+
+.fw-detail-table tr.row-kritis td:last-child {
+    color: var(--fw-crit);
+    font-weight: 600;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 640px) {
+    .fw-form-cols,
+    .fw-form-cols-3,
+    .fw-filter-form {
+        grid-template-columns: 1fr;
+    }
+
+    .fw-filter-form .fw-btn {
+        grid-column: 1;
+    }
+
+    .fw-session-card-actions {
+        flex-wrap: wrap;
+    }
+
+    .fw-detail-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+}
+
+/* Keyboard focus visibility */
+.fw-btn:focus-visible,
+.fw-form input:focus-visible,
+.fw-form select:focus-visible {
+    outline: 2px solid var(--fw-amber);
+    outline-offset: 2px;
 }
