@@ -1,5 +1,5 @@
 import type { DeviceSnapshot } from "./types/sensor";
-import { classifyGas } from "./types/sensor";
+import { classifyGas, GM3_BAHAYA } from "./types/sensor";
 
 const SIMULATED_INTERVAL_MS = 1000;
 const POLL_INTERVAL_MS = 2000; // fallback jika WebSocket gagal
@@ -17,20 +17,20 @@ interface ApiStatusResponse {
   suhu: number | null;
   kelembapan: number | null;
   tekanan: number | null;
-  gasValue: number;
+  gasGm3: number;
   status: "AMAN" | "WASPADA" | "BAHAYA";
   connected?: boolean;
 }
 
 function initialSnapshot(): DeviceSnapshot {
-  const gasValue = 650;
+  const gasGm3 = 1.5; // nilai awal aman, jauh di bawah GM3_WASPADA (~4.27)
   return {
     timestamp: new Date(),
     rtcOk: true,
     bmeOk: true,
     bme: { suhu: 29.4, kelembapan: 61.2, tekanan: 1009.8 },
-    gasValue,
-    status: classifyGas(gasValue),
+    gasGm3,
+    status: classifyGas(gasGm3),
     connected: false,
   };
 }
@@ -45,17 +45,21 @@ function toSnapshot(data: ApiStatusResponse, connectedFallback: boolean): Device
       kelembapan: data.kelembapan,
       tekanan: data.tekanan,
     },
-    gasValue: data.gasValue,
+    gasGm3: data.gasGm3,
     status: data.status,
     connected: data.connected ?? connectedFallback,
   };
 }
 
-function simulateGasValue(prev: number): number {
-  const drift = (Math.random() - 0.5) * 300;
-  const spike = Math.random() < 0.05 ? (Math.random() - 0.3) * 2000 : 0;
+// Skala simulasi disesuaikan ke rentang g/m3 (bukan ADC 0-4095 lagi).
+// GM3_BAHAYA ~8.54, jadi drift/spike dibuat proporsional ke skala kecil ini.
+function simulateGasGm3(prev: number): number {
+  const driftRange = GM3_BAHAYA * 0.15; // ~1.3 g/m3
+  const drift = (Math.random() - 0.5) * driftRange;
+  const spike = Math.random() < 0.05 ? (Math.random() - 0.3) * GM3_BAHAYA : 0;
   const next = prev + drift + spike;
-  return Math.min(4095, Math.max(0, Math.round(next)));
+  const ceiling = GM3_BAHAYA * 1.5; // biar simulasi kadang nyentuh BAHAYA juga
+  return Math.min(ceiling, Math.max(0, Number(next.toFixed(3))));
 }
 
 /**
@@ -70,7 +74,7 @@ export class DeviceDataConnection {
   private snapshot: DeviceSnapshot = initialSnapshot();
 
   private simInterval: ReturnType<typeof setInterval> | null = null;
-  private gasRef = 650;
+  private gasRef = 1.5;
 
   private ws: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -125,8 +129,8 @@ export class DeviceDataConnection {
     this.emit({ ...this.snapshot, connected: true });
 
     this.simInterval = setInterval(() => {
-      this.gasRef = simulateGasValue(this.gasRef);
-      const gasValue = this.gasRef;
+      this.gasRef = simulateGasGm3(this.gasRef);
+      const gasGm3 = this.gasRef;
 
       this.emit({
         timestamp: new Date(),
@@ -137,8 +141,8 @@ export class DeviceDataConnection {
           kelembapan: 58 + Math.cos(Date.now() / 45000) * 4,
           tekanan: 1008 + Math.sin(Date.now() / 90000) * 2,
         },
-        gasValue,
-        status: classifyGas(gasValue),
+        gasGm3,
+        status: classifyGas(gasGm3),
         connected: true,
       });
     }, SIMULATED_INTERVAL_MS);

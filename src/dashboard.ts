@@ -1,4 +1,5 @@
 import type { AirStatus, DeviceSnapshot } from "./types/sensor";
+import { GM3_WASPADA, GM3_BAHAYA } from "./types/sensor";
 import type { DeviceDataConnection, DeviceMode } from "./deviceData";
 
 const STATUS_LABEL: Record<AirStatus, string> = {
@@ -12,6 +13,9 @@ const STATUS_DESC: Record<AirStatus, string> = {
   WASPADA: "Kadar gas meningkat, pantau terus",
   BAHAYA: "Kadar gas melebihi batas aman",
 };
+
+// Skala penuh bar disamakan dengan ambang BAHAYA + buffer, dibulatkan.
+const GAS_BAR_MAX = Math.ceil(GM3_BAHAYA * 1.4); // ~12 g/m3
 
 function formatTanggal(d: Date): string {
   const dd = String(d.getDate()).padStart(2, "0");
@@ -71,16 +75,16 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
         </section>
 
         <section class="fw-panel fw-panel-gas">
-          <h2>MQ135 (ADC)</h2>
+          <h2>MQ-6 (g/m&sup3;)</h2>
           <div id="fw-gas-value" class="fw-gas-value">-</div>
           <div class="fw-gas-bar">
             <div id="fw-gas-bar-fill" class="fw-gas-bar-fill"></div>
           </div>
           <div class="fw-gas-scale">
             <span>0</span>
-            <span>1000</span>
-            <span>3000</span>
-            <span>4095</span>
+            <span>${GM3_WASPADA.toFixed(2)}</span>
+            <span>${GM3_BAHAYA.toFixed(2)}</span>
+            <span>${GAS_BAR_MAX}</span>
           </div>
         </section>
 
@@ -104,7 +108,7 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
   const connText = root.querySelector<HTMLSpanElement>("#fw-conn-text")!;
 
   function render(snap: DeviceSnapshot) {
-    const gasPct = Math.min(100, Math.round((snap.gasValue / 4095) * 100));
+    const gasPct = Math.min(100, Math.round((snap.gasGm3 / GAS_BAR_MAX) * 100));
     const statusKey = snap.status.toLowerCase();
 
     connEl.className = `fw-conn ${snap.connected ? "is-online" : "is-offline"}`;
@@ -128,7 +132,7 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
     bmeTag.textContent = snap.bmeOk ? "BME280 OK" : "BME280 ERROR";
     bmeTag.className = `fw-tag ${snap.bmeOk ? "ok" : "err"}`;
 
-    root.querySelector("#fw-gas-value")!.textContent = String(snap.gasValue);
+    root.querySelector("#fw-gas-value")!.textContent = `${snap.gasGm3.toFixed(2)} g/m³`;
     const gasBarFill = root.querySelector<HTMLDivElement>("#fw-gas-bar-fill")!;
     gasBarFill.style.width = `${gasPct}%`;
     gasBarFill.className = `fw-gas-bar-fill status-${statusKey}`;
