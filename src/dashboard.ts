@@ -1,21 +1,17 @@
 import type { AirStatus, DeviceSnapshot } from "./types/sensor";
-import { GM3_WASPADA, GM3_BAHAYA } from "./types/sensor";
 import type { DeviceDataConnection, DeviceMode } from "./deviceData";
 
 const STATUS_LABEL: Record<AirStatus, string> = {
   AMAN: "AMAN",
-  WASPADA: "WASPADA",
-  BAHAYA: "BAHAYA",
+  PERHATIAN: "PERHATIAN",
+  KRITIS: "KRITIS",
 };
 
 const STATUS_DESC: Record<AirStatus, string> = {
-  AMAN: "Kadar gas dalam batas normal",
-  WASPADA: "Kadar gas meningkat, pantau terus",
-  BAHAYA: "Kadar gas melebihi batas aman",
+  AMAN: "Konsentrasi gas dalam batas normal (di bawah/sama dengan standar A)",
+  PERHATIAN: "Konsentrasi gas di atas standar (A), mendekati batas maksimum (C)",
+  KRITIS: "Konsentrasi gas melewati batas maksimum (C) - kadar gas kelewat banyak",
 };
-
-// Skala penuh bar disamakan dengan ambang BAHAYA + buffer, dibulatkan.
-const GAS_BAR_MAX = Math.ceil(GM3_BAHAYA * 1.4); // ~12 g/m3
 
 function formatTanggal(d: Date): string {
   const dd = String(d.getDate()).padStart(2, "0");
@@ -35,13 +31,15 @@ function fmt(value: number | null, digits: number, unit: string): string {
 }
 
 // connection dibuat & di-start() oleh main.ts, dashboard cuma subscribe.
+// PENTING: dashboard ini tidak menghitung status apa pun, cuma nampilin
+// snap.status, snap.standardA/minB/maxC APA ADANYA dari device/server.
 export function mountDashboard(root: HTMLElement, connection: DeviceDataConnection, mode: DeviceMode) {
   root.innerHTML = `
     <div class="fw-dash">
       <header class="fw-titlebar">
         <div class="fw-titlebar-left">
           <span class="fw-plate">FW-01</span>
-          <h1>Monitoring Kualitas Udara</h1>
+          <h1>Monitoring Fumigasi</h1>
         </div>
         <div id="fw-conn" class="fw-conn is-offline">
           <span class="fw-conn-dot"></span>
@@ -80,16 +78,20 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
           <div class="fw-gas-bar">
             <div id="fw-gas-bar-fill" class="fw-gas-bar-fill"></div>
           </div>
-          <div class="fw-gas-scale">
+          <div id="fw-gas-scale" class="fw-gas-scale">
             <span>0</span>
-            <span>${GM3_WASPADA.toFixed(2)}</span>
-            <span>${GM3_BAHAYA.toFixed(2)}</span>
-            <span>${GAS_BAR_MAX}</span>
+            <span id="fw-scale-b">B -</span>
+            <span id="fw-scale-a">A -</span>
+            <span id="fw-scale-c">C -</span>
+          </div>
+          <div class="fw-gas-meta">
+            <span id="fw-gas-hour">Jam ke: -</span>
+            <span id="fw-gas-retention">Retensi: -</span>
           </div>
         </section>
 
         <section id="fw-status-panel" class="fw-panel fw-panel-status">
-          <h2>Status Kualitas Udara</h2>
+          <h2>Status Dosis Fumigasi</h2>
           <div class="fw-status-row">
             <span id="fw-status-label" class="fw-status-label">-</span>
             <span id="fw-status-desc" class="fw-status-desc">-</span>
@@ -108,7 +110,9 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
   const connText = root.querySelector<HTMLSpanElement>("#fw-conn-text")!;
 
   function render(snap: DeviceSnapshot) {
-    const gasPct = Math.min(100, Math.round((snap.gasGm3 / GAS_BAR_MAX) * 100));
+    // Skala bar dinamis ikut ambang C (maksimum) sesi berjalan, bukan angka tetap.
+    const barMax = Math.max(snap.maxC, snap.gasGm3, 1);
+    const gasPct = Math.min(100, Math.round((snap.gasGm3 / barMax) * 100));
     const statusKey = snap.status.toLowerCase();
 
     connEl.className = `fw-conn ${snap.connected ? "is-online" : "is-offline"}`;
@@ -137,6 +141,12 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
     gasBarFill.style.width = `${gasPct}%`;
     gasBarFill.className = `fw-gas-bar-fill status-${statusKey}`;
 
+    root.querySelector("#fw-scale-b")!.textContent = `B ${snap.minB.toFixed(1)}`;
+    root.querySelector("#fw-scale-a")!.textContent = `A ${snap.standardA.toFixed(1)}`;
+    root.querySelector("#fw-scale-c")!.textContent = `C ${snap.maxC.toFixed(1)}`;
+    root.querySelector("#fw-gas-hour")!.textContent = `Jam ke: ${snap.hourUsed}`;
+    root.querySelector("#fw-gas-retention")!.textContent = `Retensi: ${snap.retentionPct.toFixed(2)}%`;
+
     const statusPanel = root.querySelector("#fw-status-panel")!;
     statusPanel.className = `fw-panel fw-panel-status status-${statusKey}`;
     root.querySelector("#fw-status-label")!.textContent = STATUS_LABEL[snap.status];
@@ -145,9 +155,9 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
     root.querySelector("#fw-led-green")!.className =
       `fw-led fw-led-green ${snap.status === "AMAN" ? "is-lit" : ""}`;
     root.querySelector("#fw-led-amber")!.className =
-      `fw-led fw-led-amber ${snap.status === "WASPADA" ? "is-lit" : ""}`;
+      `fw-led fw-led-amber ${snap.status === "PERHATIAN" ? "is-lit" : ""}`;
     root.querySelector("#fw-led-red")!.className =
-      `fw-led fw-led-red ${snap.status === "BAHAYA" ? "is-lit" : ""}`;
+      `fw-led fw-led-red ${snap.status === "KRITIS" ? "is-lit" : ""}`;
   }
 
   connection.subscribe(render);

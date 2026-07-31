@@ -1,7 +1,11 @@
 // types/sensor.ts
-// Tipe data ini mengikuti struktur variabel pada firmware ESP32
-// (RTC DS3231, BME280, MQ-6, threshold status di updateStatus()).
-export type AirStatus = "AMAN" | "WASPADA" | "BAHAYA";
+// Tipe data ini mengikuti payload yang dikirim server (yang notabene cuma
+// meneruskan hasil hitung firmware ESP32, lihat main.cpp & server.ts).
+//
+// PENTING: web ini TIDAK menghitung status apa pun. classifyGas() di bawah
+// cuma dipakai buat MODE SIMULASI (preview UI tanpa alat fisik) - saat mode
+// live, status selalu dipakai apa adanya dari server (device yang menentukan).
+export type AirStatus = "AMAN" | "PERHATIAN" | "KRITIS";
 
 export interface BmeReading {
   suhu: number | null; // Celsius, null jika bmeOK == false
@@ -14,19 +18,21 @@ export interface DeviceSnapshot {
   rtcOk: boolean;
   bmeOk: boolean;
   bme: BmeReading;
-  gasGm3: number; // hasil Rs/Ro -> ppm -> g/m3 (Butana), BUKAN ADC mentah lagi
-  status: AirStatus;
-  connected: boolean; // status koneksi ke relay server
+  gasGm3: number; // hasil Rs/Ro -> ppm -> g/m3 (Butana), dihitung di firmware
+  elapsedHours: number;
+  hourUsed: number;
+  retentionPct: number;
+  standardA: number; // ambang standar dosis (A)
+  minB: number;       // ambang minimum (B)
+  maxC: number;        // ambang maksimum (C)
+  status: AirStatus;   // dikirim APA ADANYA dari device, bukan dihitung di web
+  connected: boolean;  // status koneksi ke relay server
 }
 
-// Threshold berbasis 10%/20% LEL Butana, identik dengan main.cpp:
-// LEL Butana ~1.8% vol = 18000 ppm -> g/m3 pakai BM=58 (0.002372 g/m3/ppm)
-const PPM_TO_GM3_BUTANA = 58 / 24450; // 0.002372
-export const GM3_WASPADA = 0.1 * 18000 * PPM_TO_GM3_BUTANA; // ~4.27 g/m3 (10% LEL)
-export const GM3_BAHAYA = 0.2 * 18000 * PPM_TO_GM3_BUTANA; // ~8.54 g/m3 (20% LEL)
-
-export function classifyGas(gasGm3: number): AirStatus {
-  if (gasGm3 < GM3_WASPADA) return "AMAN";
-  if (gasGm3 < GM3_BAHAYA) return "WASPADA";
-  return "BAHAYA";
+// HANYA dipakai untuk mode simulasi (preview UI). TIDAK dipakai saat live,
+// karena saat live status datang langsung dari device lewat server.
+export function simulateStatus(gasGm3: number, standardA: number, maxC: number): AirStatus {
+  if (gasGm3 > maxC) return "KRITIS";
+  if (gasGm3 > standardA) return "PERHATIAN";
+  return "AMAN";
 }

@@ -1,5 +1,5 @@
 import type { DeviceSnapshot } from "./types/sensor";
-import { classifyGas, GM3_BAHAYA } from "./types/sensor";
+import { simulateStatus } from "./types/sensor";
 
 const SIMULATED_INTERVAL_MS = 1000;
 const POLL_INTERVAL_MS = 2000; // fallback jika WebSocket gagal
@@ -9,7 +9,8 @@ const WS_RECONNECT_DELAY_MS = 2000;
 export type DeviceMode = "simulated" | "live";
 export type SnapshotListener = (snapshot: DeviceSnapshot) => void;
 
-// Bentuk respons dari relay server (GET /api/status dan pesan WS /ws)
+// Bentuk respons dari relay server (GET /api/status dan pesan WS /ws).
+// Semua field ini sudah dihitung di firmware, server cuma neruskan.
 interface ApiStatusResponse {
   rtcOk: boolean;
   bmeOk: boolean;
@@ -18,19 +19,37 @@ interface ApiStatusResponse {
   kelembapan: number | null;
   tekanan: number | null;
   gasGm3: number;
-  status: "AMAN" | "WASPADA" | "BAHAYA";
+  elapsedHours: number;
+  hourUsed: number;
+  retentionPct: number;
+  standardA: number;
+  minB: number;
+  maxC: number;
+  status: "AMAN" | "PERHATIAN" | "KRITIS";
   connected?: boolean;
 }
 
+// Nilai awal simulasi (retention 85% dari dosis 32 g/m3 -> A=27.2, margin default 5)
+const SIM_MARGIN = 5;
+
 function initialSnapshot(): DeviceSnapshot {
-  const gasGm3 = 1.5; // nilai awal aman, jauh di bawah GM3_WASPADA (~4.27)
+  const gasGm3 = 20;
+  const standardA = 27.2;
+  const minB = standardA - SIM_MARGIN;
+  const maxC = standardA + SIM_MARGIN;
   return {
     timestamp: new Date(),
     rtcOk: true,
     bmeOk: true,
     bme: { suhu: 29.4, kelembapan: 61.2, tekanan: 1009.8 },
     gasGm3,
-    status: classifyGas(gasGm3),
+    elapsedHours: 0.25,
+    hourUsed: 0.25,
+    retentionPct: 85,
+    standardA,
+    minB,
+    maxC,
+    status: simulateStatus(gasGm3, standardA, maxC),
     connected: false,
   };
 }
@@ -46,19 +65,25 @@ function toSnapshot(data: ApiStatusResponse, connectedFallback: boolean): Device
       tekanan: data.tekanan,
     },
     gasGm3: data.gasGm3,
-    status: data.status,
+    elapsedHours: data.elapsedHours,
+    hourUsed: data.hourUsed,
+    retentionPct: data.retentionPct,
+    standardA: data.standardA,
+    minB: data.minB,
+    maxC: data.maxC,
+    status: data.status, // apa adanya dari server/device, TIDAK dihitung ulang
     connected: data.connected ?? connectedFallback,
   };
 }
 
-// Skala simulasi disesuaikan ke rentang g/m3 (bukan ADC 0-4095 lagi).
-// GM3_BAHAYA ~8.54, jadi drift/spike dibuat proporsional ke skala kecil ini.
-function simulateGasGm3(prev: number): number {
-  const driftRange = GM3_BAHAYA * 0.15; // ~1.3 g/m3
+// Simulasi cuma buat preview UI (mode "simulated"), dibuat mendekati skenario
+// dosis 32 g/m3 di jam-jam awal biar transisi AMAN/PERHATIAN/KRITIS kelihatan.
+function simulateGasGm3(prev: number, standardA: number): number {
+  const driftRange = standardA * 0.15;
   const drift = (Math.random() - 0.5) * driftRange;
-  const spike = Math.random() < 0.05 ? (Math.random() - 0.3) * GM3_BAHAYA : 0;
+  const spike = Math.random() < 0.05 ? (Math.random() - 0.3) * standardA : 0;
   const next = prev + drift + spike;
-  const ceiling = GM3_BAHAYA * 1.5; // biar simulasi kadang nyentuh BAHAYA juga
+  const ceiling = standardA * 1.5;
   return Math.min(ceiling, Math.max(0, Number(next.toFixed(3))));
 }
 
@@ -74,7 +99,7 @@ export class DeviceDataConnection {
   private snapshot: DeviceSnapshot = initialSnapshot();
 
   private simInterval: ReturnType<typeof setInterval> | null = null;
-  private gasRef = 1.5;
+  private gasRef = 20;
 
   private ws: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -128,8 +153,12 @@ export class DeviceDataConnection {
   private startSimulated() {
     this.emit({ ...this.snapshot, connected: true });
 
+    const standardA = 27.2; // dosis 32 g/m3 x retention 85%
+    const minB = standardA - SIM_MARGIN;
+    const maxC = standardA + SIM_MARGIN;
+
     this.simInterval = setInterval(() => {
-      this.gasRef = simulateGasGm3(this.gasRef);
+      this.gasRef = simulateGasGm3(this.gasRef, standardA);
       const gasGm3 = this.gasRef;
 
       this.emit({
@@ -142,7 +171,13 @@ export class DeviceDataConnection {
           tekanan: 1008 + Math.sin(Date.now() / 90000) * 2,
         },
         gasGm3,
-        status: classifyGas(gasGm3),
+        elapsedHours: 0.25,
+        hourUsed: 0.25,
+        retentionPct: 85,
+        standardA,
+        minB,
+        maxC,
+        status: simulateStatus(gasGm3, standardA, maxC),
         connected: true,
       });
     }, SIMULATED_INTERVAL_MS);
