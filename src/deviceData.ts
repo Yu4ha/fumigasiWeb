@@ -6,7 +6,19 @@ const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 5000;
 const WS_RECONNECT_DELAY_MS = 2000;
 
-export type DeviceMode = "simulated" | "live";
+// ================== MODE DEMO (cycle AMAN -> PERLU_TOPUP -> KRITIS) ==================
+// Ambang & durasi fase ini SENGAJA disamakan dengan DUMMY_THRESHOLD_B/A/C dan
+// DEMO_PHASE_DURATION_MS di firmware TFT (main.cpp), supaya kalau device fisik
+// dan dashboard web ini dibuka bersamaan, keduanya menampilkan status yang sama
+// di waktu yang sama -- lihat catatan di bawah class soal cara kerjanya.
+const DEMO_UPDATE_INTERVAL_MS = 500;
+const DEMO_PHASE_DURATION_MS = 4000; // HARUS sama dengan DEMO_PHASE_DURATION_MS di main.cpp
+const DEMO_MIN_B = 10;   // HARUS sama dengan DUMMY_THRESHOLD_B di main.cpp
+const DEMO_STANDARD_A = 20; // HARUS sama dengan DUMMY_THRESHOLD_A di main.cpp
+const DEMO_MAX_C = 30;   // HARUS sama dengan DUMMY_THRESHOLD_C di main.cpp
+const DEMO_DURATION_USED = 2; // cuma buat tampilan "Durasi target", boleh diabaikan
+
+export type DeviceMode = "simulated" | "demo" | "live";
 export type SnapshotListener = (snapshot: DeviceSnapshot) => void;
 
 interface ApiStatusResponse {
@@ -79,6 +91,29 @@ function simulateGasGm3(prev: number, standardA: number): number {
   return Math.min(ceiling, Math.max(0, Number(next.toFixed(3))));
 }
 
+// Nilai gas dummy per fase, sama seperti updateGas() di main.cpp:
+// fase 0 = pas di A (AMAN), fase 1 = di bawah B (PERLU_TOPUP), fase 2 = di atas C (KRITIS).
+function demoGasForPhase(phase: number): number {
+  switch (phase) {
+    case 0:
+      return DEMO_STANDARD_A;
+    case 1:
+      return DEMO_MIN_B - 3;
+    default:
+      return DEMO_MAX_C + 8;
+  }
+}
+
+// Fase dihitung dari wall-clock (Date.now()), BUKAN dari kapan tab dibuka.
+// Ini kuncinya biar mode demo di web dan di TFT "sama": selama constant
+// DEMO_PHASE_DURATION_MS/B/A/C di sini identik dengan yang di main.cpp, dan jam
+// kedua perangkat sama-sama akurat (device pakai RTC DS3231, browser pakai jam
+// sistem), rumus modulo ini akan menghasilkan fase yang identik di waktu yang
+// sama -- tanpa perlu device dan browser saling berkomunikasi sama sekali.
+function currentDemoPhase(): number {
+  return Math.floor(Date.now() / DEMO_PHASE_DURATION_MS) % 3;
+}
+
 export class DeviceDataConnection {
   private mode: DeviceMode;
   private baseUrl: string | undefined;
@@ -87,6 +122,8 @@ export class DeviceDataConnection {
 
   private simInterval: ReturnType<typeof setInterval> | null = null;
   private gasRef = 18;
+
+  private demoInterval: ReturnType<typeof setInterval> | null = null;
 
   private ws: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -118,6 +155,8 @@ export class DeviceDataConnection {
     this.stopped = false;
     if (this.mode === "simulated") {
       this.startSimulated();
+    } else if (this.mode === "demo") {
+      this.startDemo();
     } else if (this.baseUrl) {
       this.startLive(this.baseUrl);
     }
@@ -127,6 +166,9 @@ export class DeviceDataConnection {
     this.stopped = true;
     if (this.simInterval) clearInterval(this.simInterval);
     this.simInterval = null;
+
+    if (this.demoInterval) clearInterval(this.demoInterval);
+    this.demoInterval = null;
 
     this.ws?.close();
     this.ws = null;
@@ -163,6 +205,35 @@ export class DeviceDataConnection {
         connected: true,
       });
     }, SIMULATED_INTERVAL_MS);
+  }
+
+  private startDemo() {
+    const tick = () => {
+      const phase = currentDemoPhase();
+      const gasGm3 = demoGasForPhase(phase);
+
+      this.emit({
+        timestamp: new Date(),
+        rtcOk: true,
+        bmeOk: true,
+        bme: {
+          suhu: 28.5 + Math.sin(Date.now() / 60000) * 1.5,
+          kelembapan: 58 + Math.cos(Date.now() / 45000) * 4,
+          tekanan: 1008 + Math.sin(Date.now() / 90000) * 2,
+        },
+        gasGm3,
+        elapsedHours: 0,
+        durationUsed: DEMO_DURATION_USED,
+        standardA: DEMO_STANDARD_A,
+        minB: DEMO_MIN_B,
+        maxC: DEMO_MAX_C,
+        status: simulateStatus(gasGm3, DEMO_MIN_B, DEMO_MAX_C),
+        connected: true,
+      });
+    };
+
+    tick();
+    this.demoInterval = setInterval(tick, DEMO_UPDATE_INTERVAL_MS);
   }
 
   private startLive(baseUrl: string) {
