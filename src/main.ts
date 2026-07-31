@@ -1,3 +1,4 @@
+// main.ts 
 import { mountApp } from "./shell";
 import { DeviceDataConnection, type DeviceMode } from "./deviceData";
 import "./style.css";
