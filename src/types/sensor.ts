@@ -5,6 +5,8 @@ export interface BMEReading {
   tekanan: number | null;
 }
 
+export type AirStatus = "AMAN" | "PERLU_TOPUP" | "KRITIS";
+
 export interface DeviceSnapshot {
   timestamp: Date;
   rtcOk: boolean;
@@ -16,7 +18,7 @@ export interface DeviceSnapshot {
   standardA: number;
   minB: number;
   maxC: number;
-  status: "AMAN" | "PERLU_TOPUP" | "KRITIS";
+  status: AirStatus;
   connected: boolean;
   buzzerActive?: boolean;
 }
@@ -25,7 +27,7 @@ export function simulateStatus(
   gasGm3: number,
   minB: number,
   maxC: number
-): "AMAN" | "PERLU_TOPUP" | "KRITIS" {
+): AirStatus {
   if (gasGm3 < minB) return "PERLU_TOPUP";
   if (gasGm3 > maxC) return "KRITIS";
   return "AMAN";

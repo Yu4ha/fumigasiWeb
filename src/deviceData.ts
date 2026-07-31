@@ -13,7 +13,7 @@ const DEMO_UPDATE_INTERVAL_MS = 500;
 const DEMO_PHASE_DURATION_MS = 4000; // Sama dengan DEMO_PHASE_DURATION_MS di main.cpp
 const DEMO_MIN_B = 10.0;   // Sama dengan DUMMY_THRESHOLD_B di main.cpp
 const DEMO_STANDARD_A = 20.0; // Sama dengan DUMMY_THRESHOLD_A di main.cpp
-const DEMO_MAX_C = 30.0;   // Sama dengan DUMMY_THRESHOLD_C di main.cpp
+const DEMO_MAX_C = 30.0;   
 const DEMO_DURATION_USED = 2;
 
 export type DeviceMode = "simulated" | "demo" | "live";
