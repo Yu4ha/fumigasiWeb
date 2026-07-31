@@ -1,30 +1,30 @@
 import type { DeviceSnapshot } from "./types/sensor";
 import { simulateStatus } from "./types/sensor";
 
+// Konfigurasi
 const SIMULATED_INTERVAL_MS = 1000;
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 5000;
 const WS_RECONNECT_DELAY_MS = 2000;
 
-// ================== MODE DEMO (cycle AMAN -> PERLU_TOPUP -> KRITIS) ==================
-// Ambang & durasi fase ini SENGAJA disamakan dengan DUMMY_THRESHOLD_B/A/C dan
-// DEMO_PHASE_DURATION_MS di firmware TFT (main.cpp), supaya kalau device fisik
-// dan dashboard web ini dibuka bersamaan, keduanya menampilkan status yang sama
-// di waktu yang sama -- lihat catatan di bawah class soal cara kerjanya.
+// ================== MODE DEMO ==================
+// HARUS SAMA dengan nilai di firmware ESP32
 const DEMO_UPDATE_INTERVAL_MS = 500;
-const DEMO_PHASE_DURATION_MS = 4000; // HARUS sama dengan DEMO_PHASE_DURATION_MS di main.cpp
-const DEMO_MIN_B = 10;   // HARUS sama dengan DUMMY_THRESHOLD_B di main.cpp
-const DEMO_STANDARD_A = 20; // HARUS sama dengan DUMMY_THRESHOLD_A di main.cpp
-const DEMO_MAX_C = 30;   // HARUS sama dengan DUMMY_THRESHOLD_C di main.cpp
-const DEMO_DURATION_USED = 2; // cuma buat tampilan "Durasi target", boleh diabaikan
+const DEMO_PHASE_DURATION_MS = 4000; // Sama dengan DEMO_PHASE_DURATION_MS di main.cpp
+const DEMO_MIN_B = 10.0;   // Sama dengan DUMMY_THRESHOLD_B di main.cpp
+const DEMO_STANDARD_A = 20.0; // Sama dengan DUMMY_THRESHOLD_A di main.cpp
+const DEMO_MAX_C = 30.0;   // Sama dengan DUMMY_THRESHOLD_C di main.cpp
+const DEMO_DURATION_USED = 2;
 
 export type DeviceMode = "simulated" | "demo" | "live";
 export type SnapshotListener = (snapshot: DeviceSnapshot) => void;
 
-interface ApiStatusResponse {
+// ================== INTERFACE API ==================
+// Sesuai dengan struktur JSON yang dikirim ESP32 ke /api/ingest
+interface ApiIngestData {
   rtcOk: boolean;
   bmeOk: boolean;
-  timestamp: string;
+  timestamp?: string;
   suhu: number | null;
   kelembapan: number | null;
   tekanan: number | null;
@@ -35,14 +35,21 @@ interface ApiStatusResponse {
   minB: number;
   maxC: number;
   status: "AMAN" | "PERLU_TOPUP" | "KRITIS";
+  buzzerActive: boolean;
+}
+
+// Response dari /api/status (sama dengan ApiIngestData + connected)
+interface ApiStatusResponse extends ApiIngestData {
   connected?: boolean;
 }
 
-const SIM_STANDARD_A = 9.6;  
-const SIM_MIN_B = 7.1;     
-const SIM_MAX_C = 12.1;      
-const SIM_DURATION_USED = 2; 
+// ================== KONSTANTA SIMULASI ==================
+const SIM_STANDARD_A = 9.6;
+const SIM_MIN_B = 7.1;
+const SIM_MAX_C = 12.1;
+const SIM_DURATION_USED = 2;
 
+// ================== FUNGSI HELPER ==================
 function initialSnapshot(): DeviceSnapshot {
   const gasGm3 = 18;
   return {
@@ -58,12 +65,13 @@ function initialSnapshot(): DeviceSnapshot {
     maxC: SIM_MAX_C,
     status: simulateStatus(gasGm3, SIM_MIN_B, SIM_MAX_C),
     connected: false,
+    buzzerActive: false,
   };
 }
 
 function toSnapshot(data: ApiStatusResponse, connectedFallback: boolean): DeviceSnapshot {
   return {
-    timestamp: new Date(data.timestamp),
+    timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
     rtcOk: data.rtcOk,
     bmeOk: data.bmeOk,
     bme: {
@@ -79,6 +87,7 @@ function toSnapshot(data: ApiStatusResponse, connectedFallback: boolean): Device
     maxC: data.maxC,
     status: data.status,
     connected: data.connected ?? connectedFallback,
+    buzzerActive: data.buzzerActive ?? false,
   };
 }
 
@@ -91,29 +100,24 @@ function simulateGasGm3(prev: number, standardA: number): number {
   return Math.min(ceiling, Math.max(0, Number(next.toFixed(3))));
 }
 
-// Nilai gas dummy per fase, sama seperti updateGas() di main.cpp:
-// fase 0 = pas di A (AMAN), fase 1 = di bawah B (PERLU_TOPUP), fase 2 = di atas C (KRITIS).
+// Nilai gas dummy per fase, SAMA dengan updateGas() di main.cpp
 function demoGasForPhase(phase: number): number {
   switch (phase) {
     case 0:
-      return DEMO_STANDARD_A;
+      return DEMO_STANDARD_A; // AMAN
     case 1:
-      return DEMO_MIN_B - 3;
+      return DEMO_MIN_B - 3.0; // PERLU_TOPUP
     default:
-      return DEMO_MAX_C + 8;
+      return DEMO_MAX_C + 8.0; // KRITIS
   }
 }
 
-// Fase dihitung dari wall-clock (Date.now()), BUKAN dari kapan tab dibuka.
-// Ini kuncinya biar mode demo di web dan di TFT "sama": selama constant
-// DEMO_PHASE_DURATION_MS/B/A/C di sini identik dengan yang di main.cpp, dan jam
-// kedua perangkat sama-sama akurat (device pakai RTC DS3231, browser pakai jam
-// sistem), rumus modulo ini akan menghasilkan fase yang identik di waktu yang
-// sama -- tanpa perlu device dan browser saling berkomunikasi sama sekali.
+// Fase dihitung dari wall-clock, SAMA dengan currentDemoPhase() di main.cpp
 function currentDemoPhase(): number {
   return Math.floor(Date.now() / DEMO_PHASE_DURATION_MS) % 3;
 }
 
+// ================== CLASS MAIN ==================
 export class DeviceDataConnection {
   private mode: DeviceMode;
   private baseUrl: string | undefined;
@@ -164,21 +168,30 @@ export class DeviceDataConnection {
 
   stop() {
     this.stopped = true;
-    if (this.simInterval) clearInterval(this.simInterval);
-    this.simInterval = null;
+    if (this.simInterval) {
+      clearInterval(this.simInterval);
+      this.simInterval = null;
+    }
 
-    if (this.demoInterval) clearInterval(this.demoInterval);
-    this.demoInterval = null;
+    if (this.demoInterval) {
+      clearInterval(this.demoInterval);
+      this.demoInterval = null;
+    }
 
     this.ws?.close();
     this.ws = null;
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-    if (this.pollTimer) clearInterval(this.pollTimer);
-    this.pollTimer = null;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
     this.usingPollFallback = false;
   }
 
+  // ================== MODE SIMULATED ==================
   private startSimulated() {
     this.emit({ ...this.snapshot, connected: true });
 
@@ -203,10 +216,12 @@ export class DeviceDataConnection {
         maxC: SIM_MAX_C,
         status: simulateStatus(gasGm3, SIM_MIN_B, SIM_MAX_C),
         connected: true,
+        buzzerActive: gasGm3 > SIM_MAX_C,
       });
     }, SIMULATED_INTERVAL_MS);
   }
 
+  // ================== MODE DEMO ==================
   private startDemo() {
     const tick = () => {
       const phase = currentDemoPhase();
@@ -229,6 +244,7 @@ export class DeviceDataConnection {
         maxC: DEMO_MAX_C,
         status: simulateStatus(gasGm3, DEMO_MIN_B, DEMO_MAX_C),
         connected: true,
+        buzzerActive: gasGm3 > DEMO_MAX_C,
       });
     };
 
@@ -236,6 +252,7 @@ export class DeviceDataConnection {
     this.demoInterval = setInterval(tick, DEMO_UPDATE_INTERVAL_MS);
   }
 
+  // ================== MODE LIVE ==================
   private startLive(baseUrl: string) {
     const pollOnce = async () => {
       try {
@@ -249,8 +266,9 @@ export class DeviceDataConnection {
         const data: ApiStatusResponse = await res.json();
         if (this.stopped) return;
         this.emit(toSnapshot(data, true));
-      } catch {
+      } catch (error) {
         if (this.stopped) return;
+        console.warn("Polling failed:", error);
         this.emit({ ...this.snapshot, connected: false });
       }
     };
@@ -264,8 +282,10 @@ export class DeviceDataConnection {
 
     const stopPollFallback = () => {
       this.usingPollFallback = false;
-      if (this.pollTimer) clearInterval(this.pollTimer);
-      this.pollTimer = null;
+      if (this.pollTimer) {
+        clearInterval(this.pollTimer);
+        this.pollTimer = null;
+      }
     };
 
     const connectWs = () => {
@@ -275,20 +295,28 @@ export class DeviceDataConnection {
       const ws = new WebSocket(wsUrl);
       this.ws = ws;
 
-      ws.onopen = () => stopPollFallback();
+      ws.onopen = () => {
+        console.log("WebSocket connected");
+        stopPollFallback();
+      };
 
       ws.onmessage = (event) => {
         if (this.stopped) return;
         try {
           const data: ApiStatusResponse = JSON.parse(event.data);
           this.emit(toSnapshot(data, true));
-        } catch {
+        } catch (error) {
+          console.warn("Failed to parse WebSocket message:", error);
         }
       };
 
-      ws.onerror = () => ws.close();
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        ws.close();
+      };
 
       ws.onclose = () => {
+        console.log("WebSocket closed");
         if (this.stopped) return;
         startPollFallback();
         this.reconnectTimer = setTimeout(connectWs, WS_RECONNECT_DELAY_MS);
@@ -298,4 +326,17 @@ export class DeviceDataConnection {
     connectWs();
     startPollFallback();
   }
+}
+
+// ================== FACTORY FUNCTIONS ==================
+export function createSimulatedConnection(): DeviceDataConnection {
+  return new DeviceDataConnection("simulated");
+}
+
+export function createDemoConnection(): DeviceDataConnection {
+  return new DeviceDataConnection("demo");
+}
+
+export function createLiveConnection(baseUrl: string): DeviceDataConnection {
+  return new DeviceDataConnection("live", baseUrl);
 }

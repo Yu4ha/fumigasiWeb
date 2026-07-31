@@ -1,6 +1,5 @@
-export type AirStatus = "AMAN" | "PERLU_TOPUP" | "KRITIS";
-
-export interface BmeReading {
+// types/sensor.ts
+export interface BMEReading {
   suhu: number | null;
   kelembapan: number | null;
   tekanan: number | null;
@@ -10,19 +9,24 @@ export interface DeviceSnapshot {
   timestamp: Date;
   rtcOk: boolean;
   bmeOk: boolean;
-  bme: BmeReading;
+  bme: BMEReading;
   gasGm3: number;
   elapsedHours: number;
   durationUsed: number;
   standardA: number;
   minB: number;
   maxC: number;
-  status: AirStatus;
+  status: "AMAN" | "PERLU_TOPUP" | "KRITIS";
   connected: boolean;
+  buzzerActive?: boolean;
 }
 
-export function simulateStatus(gasGm3: number, minB: number, maxC: number): AirStatus {
-  if (gasGm3 > maxC) return "KRITIS";
+export function simulateStatus(
+  gasGm3: number,
+  minB: number,
+  maxC: number
+): "AMAN" | "PERLU_TOPUP" | "KRITIS" {
   if (gasGm3 < minB) return "PERLU_TOPUP";
+  if (gasGm3 > maxC) return "KRITIS";
   return "AMAN";
 }
