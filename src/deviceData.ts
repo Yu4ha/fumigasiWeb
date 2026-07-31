@@ -26,10 +26,10 @@ interface ApiStatusResponse {
   connected?: boolean;
 }
 
-const SIM_STANDARD_A = 19.2;
-const SIM_MIN_B = 14.2;
-const SIM_MAX_C = 24.2;
-const SIM_DURATION_USED = 2;
+const SIM_STANDARD_A = 9.6;  
+const SIM_MIN_B = 7.1;     
+const SIM_MAX_C = 12.1;      
+const SIM_DURATION_USED = 2; 
 
 function initialSnapshot(): DeviceSnapshot {
   const gasGm3 = 18;

@@ -108,15 +108,15 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
             <label for="fw-dose">Takaran Gas (Dosis Standar, g/m³)</label>
             <select id="fw-dose" name="initialDose" required>
               <option value="" disabled selected>Pilih dosis...</option>
+              <option value="16">16 g/m³</option>
+              <option value="20">20 g/m³</option>
+              <option value="24">24 g/m³</option>
+              <option value="28">28 g/m³</option>
               <option value="32">32 g/m³</option>
+              <option value="36">36 g/m³</option>
               <option value="40">40 g/m³</option>
-              <option value="48">48 g/m³</option>
-              <option value="56">56 g/m³</option>
+              <option value="44">44 g/m³</option>
               <option value="64">64 g/m³</option>
-              <option value="72">72 g/m³</option>
-              <option value="80">80 g/m³</option>
-              <option value="88">88 g/m³</option>
-              <option value="128">128 g/m³</option>
             </select>
           </div>
 
