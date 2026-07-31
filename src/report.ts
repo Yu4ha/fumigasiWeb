@@ -1,27 +1,10 @@
-// report.ts
-// Halaman "Riwayat & Laporan Fumigasi": form mulai sesi baru + daftar
-// riwayat sesi ("per-tiap alat dinyalakan") dengan link Lihat Laporan / Cetak PDF.
-//
-// CATATAN INTEGRASI:
-// - Modul ini fetch langsung ke relay server (tidak lewat DeviceDataConnection),
-//   karena datanya historis (PostgreSQL), bukan snapshot realtime.
-// - apiBase WAJIB diisi URL relay server yang sesungguhnya (mis. dari
-//   VITE_RELAY_URL / import.meta.env), BUKAN dikosongkan, kecuali web dan
-//   server memang di-serve dari origin yang sama persis.
-//
-// CATATAN VOLUME/GAS:
-// - container_volume_m3 & total_gas_grams TIDAK dikirim oleh API (bukan
-//   kolom DB), makanya dihitung ulang di sini dari container_p/l/t +
-//   initial_dose yang memang ada di SessionRow. container_p/l/t sudah
-//   dalam satuan meter (sesuai form "Dimensi Container P x L x T (meter)").
-
-type GasStatus = "AMAN" | "PERHATIAN" | "KRITIS";
+type GasStatus = "AMAN" | "PERLU_TOPUP" | "KRITIS";
 
 interface SessionRow {
     id: number;
     label: string | null;
     initial_dose: number;
-    margin: number;
+    duration_hours: number;
     start_point_at: string;
     ended_at: string | null;
     is_active: boolean;
@@ -39,7 +22,7 @@ interface SessionSummary {
     session: SessionRow;
     total_readings: number;
     count_aman: number;
-    count_perhatian: number;
+    count_perlu_topup: number;
     count_kritis: number;
     min_gas: number | null;
     max_gas: number | null;
@@ -58,7 +41,6 @@ interface ReadingRow {
     created_at: string;
 }
 
-/** Volume kontainer (m3) dari P/L/T dalam meter. Null kalau salah satu dimensi belum diisi. */
 function computeVolumeM3(
     p: number | null,
     l: number | null,
@@ -68,7 +50,6 @@ function computeVolumeM3(
     return p * l * t;
 }
 
-/** Total gas (gram) = dosis (g/m3) x volume (m3). Null kalau volume belum diketahui. */
 function computeTotalGasGrams(doseGm3: number, volumeM3: number | null): number | null {
     if (volumeM3 == null) return null;
     return doseGm3 * volumeM3;
@@ -85,8 +66,6 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string): HTMLEl
     return node;
 }
 
-// Kalau relay server diakses lewat tunnel ngrok, ngrok nampilin halaman
-// warning HTML ke request browser biasa (bukan JSON) kecuali header ini ada.
 const NGROK_HEADERS = { "ngrok-skip-browser-warning": "true" } as const;
 
 export function mountFumigationReport(root: HTMLElement, apiBase: string): void {
@@ -137,12 +116,19 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
               <option value="72">72 g/m³</option>
               <option value="80">80 g/m³</option>
               <option value="88">88 g/m³</option>
-              <option value="96">96 g/m³</option>
-              <option value="104">104 g/m³</option>
               <option value="128">128 g/m³</option>
-              <option value="136">136 g/m³</option>
-              <option value="144">144 g/m³</option>
-              <option value="152">152 g/m³</option>
+            </select>
+          </div>
+
+          <div class="fw-form-row">
+            <label for="fw-duration">Durasi Fumigasi</label>
+            <select id="fw-duration" name="durationHours" required>
+              <option value="" disabled selected>Pilih durasi...</option>
+              <option value="2">2 jam</option>
+              <option value="4">4 jam</option>
+              <option value="12">12 jam</option>
+              <option value="24">24 jam</option>
+              <option value="48">48 jam</option>
             </select>
           </div>
 
@@ -150,7 +136,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
             <div>Volume container: <b id="fw-computed-volume">-</b> m³</div>
             <div>Total gas dibutuhkan: <b id="fw-computed-gas">-</b> gram</div>
             <div class="fw-computed-hint">
-              Dosis (g/m³) dipakai sebagai acuan ambang batas AMAN/PERHATIAN/KRITIS.
+              Dosis (g/m³) dan durasi dipakai sebagai acuan ambang batas AMAN/PERLU TOP-UP/KRITIS.
               Total gas (gram) cuma info bantu takaran fisik, dihitung otomatis dari Dosis × Volume.
             </div>
           </div>
@@ -184,7 +170,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
             <select id="fw-filter-status" name="status">
               <option value="">Semua status</option>
               <option value="AMAN">AMAN</option>
-              <option value="PERHATIAN">PERHATIAN</option>
+              <option value="PERLU_TOPUP">PERLU TOP-UP</option>
               <option value="KRITIS">KRITIS</option>
             </select>
           </div>
@@ -263,7 +249,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
             opt.textContent = `#${s.id}${s.label ? " · " + s.label : ""}`;
             filterSessionSelect.appendChild(opt);
         });
-        filterSessionSelect.value = current; // pertahankan pilihan kalau masih ada di daftar baru
+        filterSessionSelect.value = current;
     }
 
     function renderList(sessions: SessionRow[]): void {
@@ -300,7 +286,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
           <div><b>Volume:</b> ${volume !== null ? volume.toFixed(4) : "-"} m³ · <b>Total gas:</b> ${
                 totalGas !== null ? totalGas.toFixed(3) : "-"
             } gram</div>
-          <div><b>Takaran gas:</b> ${s.initial_dose} g/m³ (margin ±${s.margin})</div>
+          <div><b>Takaran gas:</b> ${s.initial_dose} g/m³ (durasi ${s.duration_hours} jam)</div>
           <div><b>Mulai:</b> ${fmtDate(s.start_point_at)}</div>
           <div><b>Selesai:</b> ${fmtDate(s.ended_at)}</div>
         </div>
@@ -356,7 +342,6 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
                 const blob = await res.blob();
                 const url = URL.createObjectURL(blob);
                 window.open(url, "_blank", "noopener");
-                // beri jeda sebelum revoke supaya tab baru sempat memuat filenya
                 setTimeout(() => URL.revokeObjectURL(url), 30000);
             } catch (err) {
                 alert("Gagal membuka PDF.");
@@ -403,7 +388,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
         detailBody.innerHTML = `
       <div class="fw-detail-summary">
         <div>Total pembacaan: <b>${summary.total_readings}</b></div>
-        <div>AMAN: <b>${summary.count_aman}</b> · PERHATIAN: <b>${summary.count_perhatian}</b> · KRITIS: <b>${summary.count_kritis}</b></div>
+        <div>AMAN: <b>${summary.count_aman}</b> · PERLU TOP-UP: <b>${summary.count_perlu_topup}</b> · KRITIS: <b>${summary.count_kritis}</b></div>
         <div>Nilai sensor min/max/rata-rata: <b>${summary.min_gas ?? "-"} / ${summary.max_gas ?? "-"} / ${
             summary.avg_gas !== null ? summary.avg_gas.toFixed(2) : "-"
         }</b></div>
@@ -436,7 +421,6 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
 
         const to = fd.get("to");
         if (to) {
-            // set ke akhir hari biar tanggal "to" ikut kehitung penuh
             const toDate = new Date(String(to));
             toDate.setHours(23, 59, 59, 999);
             params.set("to", toDate.toISOString());
@@ -496,6 +480,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
         const body = {
             label: String(fd.get("label") || "") || undefined,
             initialDose: Number(fd.get("initialDose")),
+            durationHours: Number(fd.get("durationHours")),
             operatorSupervisor: String(fd.get("operatorSupervisor") || "") || undefined,
             operatorHelper1: String(fd.get("operatorHelper1") || "") || undefined,
             operatorHelper2: String(fd.get("operatorHelper2") || "") || undefined,
@@ -507,6 +492,11 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
 
         if (!body.initialDose || Number.isNaN(body.initialDose)) {
             formMsg.textContent = "Takaran gas wajib dipilih.";
+            formMsg.className = "fw-form-msg is-error";
+            return;
+        }
+        if (!body.durationHours || Number.isNaN(body.durationHours)) {
+            formMsg.textContent = "Durasi fumigasi wajib dipilih.";
             formMsg.className = "fw-form-msg is-error";
             return;
         }

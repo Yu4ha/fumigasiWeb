@@ -2,15 +2,13 @@ import type { DeviceSnapshot } from "./types/sensor";
 import { simulateStatus } from "./types/sensor";
 
 const SIMULATED_INTERVAL_MS = 1000;
-const POLL_INTERVAL_MS = 2000; // fallback jika WebSocket gagal
+const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 5000;
 const WS_RECONNECT_DELAY_MS = 2000;
 
 export type DeviceMode = "simulated" | "live";
 export type SnapshotListener = (snapshot: DeviceSnapshot) => void;
 
-// Bentuk respons dari relay server (GET /api/status dan pesan WS /ws).
-// Semua field ini sudah dihitung di firmware, server cuma neruskan.
 interface ApiStatusResponse {
   rtcOk: boolean;
   bmeOk: boolean;
@@ -20,23 +18,21 @@ interface ApiStatusResponse {
   tekanan: number | null;
   gasGm3: number;
   elapsedHours: number;
-  hourUsed: number;
-  retentionPct: number;
+  durationUsed: number;
   standardA: number;
   minB: number;
   maxC: number;
-  status: "AMAN" | "PERHATIAN" | "KRITIS";
+  status: "AMAN" | "PERLU_TOPUP" | "KRITIS";
   connected?: boolean;
 }
 
-// Nilai awal simulasi (retention 85% dari dosis 32 g/m3 -> A=27.2, margin default 5)
-const SIM_MARGIN = 5;
+const SIM_STANDARD_A = 19.2;
+const SIM_MIN_B = 14.2;
+const SIM_MAX_C = 24.2;
+const SIM_DURATION_USED = 2;
 
 function initialSnapshot(): DeviceSnapshot {
-  const gasGm3 = 20;
-  const standardA = 27.2;
-  const minB = standardA - SIM_MARGIN;
-  const maxC = standardA + SIM_MARGIN;
+  const gasGm3 = 18;
   return {
     timestamp: new Date(),
     rtcOk: true,
@@ -44,12 +40,11 @@ function initialSnapshot(): DeviceSnapshot {
     bme: { suhu: 29.4, kelembapan: 61.2, tekanan: 1009.8 },
     gasGm3,
     elapsedHours: 0.25,
-    hourUsed: 0.25,
-    retentionPct: 85,
-    standardA,
-    minB,
-    maxC,
-    status: simulateStatus(gasGm3, standardA, maxC),
+    durationUsed: SIM_DURATION_USED,
+    standardA: SIM_STANDARD_A,
+    minB: SIM_MIN_B,
+    maxC: SIM_MAX_C,
+    status: simulateStatus(gasGm3, SIM_MIN_B, SIM_MAX_C),
     connected: false,
   };
 }
@@ -66,18 +61,15 @@ function toSnapshot(data: ApiStatusResponse, connectedFallback: boolean): Device
     },
     gasGm3: data.gasGm3,
     elapsedHours: data.elapsedHours,
-    hourUsed: data.hourUsed,
-    retentionPct: data.retentionPct,
+    durationUsed: data.durationUsed,
     standardA: data.standardA,
     minB: data.minB,
     maxC: data.maxC,
-    status: data.status, // apa adanya dari server/device, TIDAK dihitung ulang
+    status: data.status,
     connected: data.connected ?? connectedFallback,
   };
 }
 
-// Simulasi cuma buat preview UI (mode "simulated"), dibuat mendekati skenario
-// dosis 32 g/m3 di jam-jam awal biar transisi AMAN/PERHATIAN/KRITIS kelihatan.
 function simulateGasGm3(prev: number, standardA: number): number {
   const driftRange = standardA * 0.15;
   const drift = (Math.random() - 0.5) * driftRange;
@@ -87,11 +79,6 @@ function simulateGasGm3(prev: number, standardA: number): number {
   return Math.min(ceiling, Math.max(0, Number(next.toFixed(3))));
 }
 
-/**
- * Mengelola koneksi data device (simulasi atau live ke relay server) dan
- * memanggil listener setiap kali ada snapshot baru. Pengganti hook React
- * useDeviceData, dipakai lewat subscribe()/start()/stop().
- */
 export class DeviceDataConnection {
   private mode: DeviceMode;
   private baseUrl: string | undefined;
@@ -99,7 +86,7 @@ export class DeviceDataConnection {
   private snapshot: DeviceSnapshot = initialSnapshot();
 
   private simInterval: ReturnType<typeof setInterval> | null = null;
-  private gasRef = 20;
+  private gasRef = 18;
 
   private ws: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -118,7 +105,7 @@ export class DeviceDataConnection {
 
   subscribe(listener: SnapshotListener): () => void {
     this.listeners.add(listener);
-    listener(this.snapshot); // langsung kasih snapshot terakhir saat subscribe
+    listener(this.snapshot);
     return () => this.listeners.delete(listener);
   }
 
@@ -153,12 +140,8 @@ export class DeviceDataConnection {
   private startSimulated() {
     this.emit({ ...this.snapshot, connected: true });
 
-    const standardA = 27.2; // dosis 32 g/m3 x retention 85%
-    const minB = standardA - SIM_MARGIN;
-    const maxC = standardA + SIM_MARGIN;
-
     this.simInterval = setInterval(() => {
-      this.gasRef = simulateGasGm3(this.gasRef, standardA);
+      this.gasRef = simulateGasGm3(this.gasRef, SIM_STANDARD_A);
       const gasGm3 = this.gasRef;
 
       this.emit({
@@ -172,12 +155,11 @@ export class DeviceDataConnection {
         },
         gasGm3,
         elapsedHours: 0.25,
-        hourUsed: 0.25,
-        retentionPct: 85,
-        standardA,
-        minB,
-        maxC,
-        status: simulateStatus(gasGm3, standardA, maxC),
+        durationUsed: SIM_DURATION_USED,
+        standardA: SIM_STANDARD_A,
+        minB: SIM_MIN_B,
+        maxC: SIM_MAX_C,
+        status: simulateStatus(gasGm3, SIM_MIN_B, SIM_MAX_C),
         connected: true,
       });
     }, SIMULATED_INTERVAL_MS);
@@ -187,11 +169,11 @@ export class DeviceDataConnection {
     const pollOnce = async () => {
       try {
         const res = await fetch(`${baseUrl}/api/status`, {
-  signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
-  headers: {
-    "ngrok-skip-browser-warning": "true",
-  },
-});
+          signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
+          headers: {
+            "ngrok-skip-browser-warning": "true",
+          },
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: ApiStatusResponse = await res.json();
         if (this.stopped) return;
@@ -230,7 +212,6 @@ export class DeviceDataConnection {
           const data: ApiStatusResponse = JSON.parse(event.data);
           this.emit(toSnapshot(data, true));
         } catch {
-          // abaikan pesan yang tidak valid
         }
       };
 
