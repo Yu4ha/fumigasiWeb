@@ -5,12 +5,14 @@ const STATUS_LABEL: Record<AirStatus, string> = {
   AMAN: "AMAN",
   PERLU_TOPUP: "PERLU TOP-UP",
   KRITIS: "KRITIS",
+  DISTRIBUTING: "DISTRIBUSI GAS",
 };
 
 const STATUS_DESC: Record<AirStatus, string> = {
   AMAN: "Konsentrasi gas berada di antara batas minimum (B) dan maksimum (C)",
   PERLU_TOPUP: "Konsentrasi gas di bawah batas minimum (B) - perlu top-up gas",
   KRITIS: "Konsentrasi gas melewati batas maksimum (C) - kadar gas kelewat banyak",
+  DISTRIBUTING: "Menunggu gas mencapai Start Point sebelum fase fumigasi dimulai",
 };
 
 function formatTanggal(d: Date): string {
@@ -85,6 +87,10 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
             <span id="fw-gas-duration">Durasi target: -</span>
             <span id="fw-gas-elapsed">Berjalan: -</span>
           </div>
+          <div class="fw-gas-meta">
+            <span id="fw-gas-startpoint">Start Point: -</span>
+            <span id="fw-gas-fuzzy">Skor fuzzy: -</span>
+          </div>
         </section>
 
         <section id="fw-status-panel" class="fw-panel fw-panel-status">
@@ -140,8 +146,10 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
     root.querySelector("#fw-scale-b")!.textContent = `B ${snap.minB.toFixed(1)}`;
     root.querySelector("#fw-scale-a")!.textContent = `A ${snap.standardA.toFixed(1)}`;
     root.querySelector("#fw-scale-c")!.textContent = `C ${snap.maxC.toFixed(1)}`;
-    root.querySelector("#fw-gas-duration")!.textContent = `Durasi target: ${snap.durationUsed} jam`;
-    root.querySelector("#fw-gas-elapsed")!.textContent = `Berjalan: ${snap.elapsedHours.toFixed(2)} jam`;
+    root.querySelector("#fw-gas-duration")!.textContent = `Durasi target: ${snap.durationUsed} menit`;
+    root.querySelector("#fw-gas-elapsed")!.textContent = `Berjalan: ${snap.elapsedMinutes.toFixed(1)} menit`;
+    root.querySelector("#fw-gas-startpoint")!.textContent = `Start Point: ${snap.startPointReached ? "tercapai" : "belum"}`;
+    root.querySelector("#fw-gas-fuzzy")!.textContent = `Skor fuzzy: ${snap.fuzzyScore !== null ? snap.fuzzyScore.toFixed(1) : "-"}`;
 
     const statusPanel = root.querySelector("#fw-status-panel")!;
     statusPanel.className = `fw-panel fw-panel-status status-${statusKey}`;
@@ -151,7 +159,7 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
     root.querySelector("#fw-led-green")!.className =
       `fw-led fw-led-green ${snap.status === "AMAN" ? "is-lit" : ""}`;
     root.querySelector("#fw-led-amber")!.className =
-      `fw-led fw-led-amber ${snap.status === "PERLU_TOPUP" ? "is-lit" : ""}`;
+      `fw-led fw-led-amber ${snap.status === "PERLU_TOPUP" || snap.status === "DISTRIBUTING" ? "is-lit" : ""}`;
     root.querySelector("#fw-led-red")!.className =
       `fw-led fw-led-red ${snap.status === "KRITIS" ? "is-lit" : ""}`;
   }

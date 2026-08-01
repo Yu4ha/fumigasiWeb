@@ -1,26 +1,21 @@
 import type { DeviceSnapshot } from "./types/sensor";
 import { simulateStatus } from "./types/sensor";
 
-// Konfigurasi
 const SIMULATED_INTERVAL_MS = 1000;
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 5000;
 const WS_RECONNECT_DELAY_MS = 2000;
 
-// ================== MODE DEMO ==================
-// HARUS SAMA dengan nilai di firmware ESP32
 const DEMO_UPDATE_INTERVAL_MS = 500;
-const DEMO_PHASE_DURATION_MS = 4000; // Sama dengan DEMO_PHASE_DURATION_MS di main.cpp
-const DEMO_MIN_B = 10.0;   // Sama dengan DUMMY_THRESHOLD_B di main.cpp
-const DEMO_STANDARD_A = 20.0; // Sama dengan DUMMY_THRESHOLD_A di main.cpp
-const DEMO_MAX_C = 30.0;   
+const DEMO_PHASE_DURATION_MS = 4000;
+const DEMO_MIN_B = 10.0;
+const DEMO_STANDARD_A = 20.0;
+const DEMO_MAX_C = 30.0;
 const DEMO_DURATION_USED = 2;
 
 export type DeviceMode = "simulated" | "demo" | "live";
 export type SnapshotListener = (snapshot: DeviceSnapshot) => void;
 
-// ================== INTERFACE API ==================
-// Sesuai dengan struktur JSON yang dikirim ESP32 ke /api/ingest
 interface ApiIngestData {
   rtcOk: boolean;
   bmeOk: boolean;
@@ -29,41 +24,43 @@ interface ApiIngestData {
   kelembapan: number | null;
   tekanan: number | null;
   gasGm3: number;
-  elapsedHours: number;
+  startPointReached: boolean;
+  elapsedMinutes: number;
   durationUsed: number;
   standardA: number;
   minB: number;
   maxC: number;
-  status: "AMAN" | "PERLU_TOPUP" | "KRITIS";
+  fuzzyScore: number | null;
+  status: "AMAN" | "PERLU_TOPUP" | "KRITIS" | "DISTRIBUTING";
   buzzerActive: boolean;
 }
 
-// Response dari /api/status (sama dengan ApiIngestData + connected)
 interface ApiStatusResponse extends ApiIngestData {
   connected?: boolean;
 }
 
-// ================== KONSTANTA SIMULASI ==================
 const SIM_STANDARD_A = 9.6;
 const SIM_MIN_B = 7.1;
 const SIM_MAX_C = 12.1;
 const SIM_DURATION_USED = 2;
 
-// ================== FUNGSI HELPER ==================
 function initialSnapshot(): DeviceSnapshot {
   const gasGm3 = 18;
+  const { status, fuzzyScore } = simulateStatus(gasGm3, SIM_MIN_B, SIM_STANDARD_A, SIM_MAX_C);
   return {
     timestamp: new Date(),
     rtcOk: true,
     bmeOk: true,
     bme: { suhu: 29.4, kelembapan: 61.2, tekanan: 1009.8 },
     gasGm3,
-    elapsedHours: 0.25,
+    startPointReached: true,
+    elapsedMinutes: 15,
     durationUsed: SIM_DURATION_USED,
     standardA: SIM_STANDARD_A,
     minB: SIM_MIN_B,
     maxC: SIM_MAX_C,
-    status: simulateStatus(gasGm3, SIM_MIN_B, SIM_MAX_C),
+    fuzzyScore,
+    status,
     connected: false,
     buzzerActive: false,
   };
@@ -80,11 +77,13 @@ function toSnapshot(data: ApiStatusResponse, connectedFallback: boolean): Device
       tekanan: data.tekanan,
     },
     gasGm3: data.gasGm3,
-    elapsedHours: data.elapsedHours,
+    startPointReached: data.startPointReached,
+    elapsedMinutes: data.elapsedMinutes,
     durationUsed: data.durationUsed,
     standardA: data.standardA,
     minB: data.minB,
     maxC: data.maxC,
+    fuzzyScore: data.fuzzyScore,
     status: data.status,
     connected: data.connected ?? connectedFallback,
     buzzerActive: data.buzzerActive ?? false,
@@ -100,24 +99,21 @@ function simulateGasGm3(prev: number, standardA: number): number {
   return Math.min(ceiling, Math.max(0, Number(next.toFixed(3))));
 }
 
-// Nilai gas dummy per fase, SAMA dengan updateGas() di main.cpp
 function demoGasForPhase(phase: number): number {
   switch (phase) {
     case 0:
-      return DEMO_STANDARD_A; // AMAN
+      return DEMO_STANDARD_A;
     case 1:
-      return DEMO_MIN_B - 3.0; // PERLU_TOPUP
+      return DEMO_MIN_B - 3.0;
     default:
-      return DEMO_MAX_C + 8.0; // KRITIS
+      return DEMO_MAX_C + 8.0;
   }
 }
 
-// Fase dihitung dari wall-clock, SAMA dengan currentDemoPhase() di main.cpp
 function currentDemoPhase(): number {
   return Math.floor(Date.now() / DEMO_PHASE_DURATION_MS) % 3;
 }
 
-// ================== CLASS MAIN ==================
 export class DeviceDataConnection {
   private mode: DeviceMode;
   private baseUrl: string | undefined;
@@ -191,13 +187,13 @@ export class DeviceDataConnection {
     this.usingPollFallback = false;
   }
 
-  // ================== MODE SIMULATED ==================
   private startSimulated() {
     this.emit({ ...this.snapshot, connected: true });
 
     this.simInterval = setInterval(() => {
       this.gasRef = simulateGasGm3(this.gasRef, SIM_STANDARD_A);
       const gasGm3 = this.gasRef;
+      const { status, fuzzyScore } = simulateStatus(gasGm3, SIM_MIN_B, SIM_STANDARD_A, SIM_MAX_C);
 
       this.emit({
         timestamp: new Date(),
@@ -209,23 +205,25 @@ export class DeviceDataConnection {
           tekanan: 1008 + Math.sin(Date.now() / 90000) * 2,
         },
         gasGm3,
-        elapsedHours: 0.25,
+        startPointReached: true,
+        elapsedMinutes: 15,
         durationUsed: SIM_DURATION_USED,
         standardA: SIM_STANDARD_A,
         minB: SIM_MIN_B,
         maxC: SIM_MAX_C,
-        status: simulateStatus(gasGm3, SIM_MIN_B, SIM_MAX_C),
+        fuzzyScore,
+        status,
         connected: true,
         buzzerActive: gasGm3 > SIM_MAX_C,
       });
     }, SIMULATED_INTERVAL_MS);
   }
 
-  // ================== MODE DEMO ==================
   private startDemo() {
     const tick = () => {
       const phase = currentDemoPhase();
       const gasGm3 = demoGasForPhase(phase);
+      const { status, fuzzyScore } = simulateStatus(gasGm3, DEMO_MIN_B, DEMO_STANDARD_A, DEMO_MAX_C);
 
       this.emit({
         timestamp: new Date(),
@@ -237,12 +235,14 @@ export class DeviceDataConnection {
           tekanan: 1008 + Math.sin(Date.now() / 90000) * 2,
         },
         gasGm3,
-        elapsedHours: 0,
+        startPointReached: true,
+        elapsedMinutes: 2,
         durationUsed: DEMO_DURATION_USED,
         standardA: DEMO_STANDARD_A,
         minB: DEMO_MIN_B,
         maxC: DEMO_MAX_C,
-        status: simulateStatus(gasGm3, DEMO_MIN_B, DEMO_MAX_C),
+        fuzzyScore,
+        status,
         connected: true,
         buzzerActive: gasGm3 > DEMO_MAX_C,
       });
@@ -252,7 +252,6 @@ export class DeviceDataConnection {
     this.demoInterval = setInterval(tick, DEMO_UPDATE_INTERVAL_MS);
   }
 
-  // ================== MODE LIVE ==================
   private startLive(baseUrl: string) {
     const pollOnce = async () => {
       try {
@@ -328,7 +327,6 @@ export class DeviceDataConnection {
   }
 }
 
-// ================== FACTORY FUNCTIONS ==================
 export function createSimulatedConnection(): DeviceDataConnection {
   return new DeviceDataConnection("simulated");
 }

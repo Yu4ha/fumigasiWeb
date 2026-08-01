@@ -1,4 +1,4 @@
-type GasStatus = "AMAN" | "PERLU_TOPUP" | "KRITIS";
+type GasStatus = "AMAN" | "PERLU_TOPUP" | "KRITIS" | "DISTRIBUTING";
 
 interface SessionRow {
     id: number;
@@ -24,6 +24,7 @@ interface SessionSummary {
     count_aman: number;
     count_perlu_topup: number;
     count_kritis: number;
+    count_distributing: number;
     min_gas: number | null;
     max_gas: number | null;
     avg_gas: number | null;
@@ -37,6 +38,7 @@ interface ReadingRow {
     standard_a: number;
     min_b: number;
     max_c: number;
+    fuzzy_score: number | null;
     status: GasStatus;
     created_at: string;
 }
@@ -58,6 +60,10 @@ function computeTotalGasGrams(doseGm3: number, volumeM3: number | null): number 
 function fmtDate(iso: string | null): string {
     if (!iso) return "-";
     return new Date(iso).toLocaleString("id-ID");
+}
+
+function fmtFuzzy(score: number | null): string {
+    return score !== null ? score.toFixed(1) : "-";
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string): HTMLElementTagNameMap[K] {
@@ -124,11 +130,11 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
             <label for="fw-duration">Durasi Fumigasi</label>
             <select id="fw-duration" name="durationHours" required>
               <option value="" disabled selected>Pilih durasi...</option>
-              <option value="2">2 jam</option>
-              <option value="4">4 jam</option>
-              <option value="12">12 jam</option>
-              <option value="24">24 jam</option>
-              <option value="48">48 jam</option>
+              <option value="2">2 menit</option>
+              <option value="4">4 menit</option>
+              <option value="12">12 menit</option>
+              <option value="24">24 menit</option>
+              <option value="48">48 menit</option>
             </select>
           </div>
 
@@ -169,6 +175,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
             <label for="fw-filter-status">Status</label>
             <select id="fw-filter-status" name="status">
               <option value="">Semua status</option>
+              <option value="DISTRIBUTING">DISTRIBUSI GAS</option>
               <option value="AMAN">AMAN</option>
               <option value="PERLU_TOPUP">PERLU TOP-UP</option>
               <option value="KRITIS">KRITIS</option>
@@ -286,7 +293,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
           <div><b>Volume:</b> ${volume !== null ? volume.toFixed(4) : "-"} m³ · <b>Total gas:</b> ${
                 totalGas !== null ? totalGas.toFixed(3) : "-"
             } gram</div>
-          <div><b>Takaran gas:</b> ${s.initial_dose} g/m³ (durasi ${s.duration_hours} jam)</div>
+          <div><b>Takaran gas:</b> ${s.initial_dose} g/m³ (durasi ${s.duration_hours} menit)</div>
           <div><b>Mulai:</b> ${fmtDate(s.start_point_at)}</div>
           <div><b>Selesai:</b> ${fmtDate(s.ended_at)}</div>
         </div>
@@ -380,6 +387,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
           <td>${r.standard_a}</td>
           <td>${r.min_b}</td>
           <td>${r.max_c}</td>
+          <td>${fmtFuzzy(r.fuzzy_score)}</td>
           <td>${r.status}</td>
         </tr>`
             )
@@ -388,17 +396,18 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
         detailBody.innerHTML = `
       <div class="fw-detail-summary">
         <div>Total pembacaan: <b>${summary.total_readings}</b></div>
+        <div>Fase distribusi: <b>${summary.count_distributing}</b></div>
         <div>AMAN: <b>${summary.count_aman}</b> · PERLU TOP-UP: <b>${summary.count_perlu_topup}</b> · KRITIS: <b>${summary.count_kritis}</b></div>
-        <div>Nilai sensor min/max/rata-rata: <b>${summary.min_gas ?? "-"} / ${summary.max_gas ?? "-"} / ${
+        <div>Nilai sensor (fase fumigasi) min/max/rata-rata: <b>${summary.min_gas ?? "-"} / ${summary.max_gas ?? "-"} / ${
             summary.avg_gas !== null ? summary.avg_gas.toFixed(2) : "-"
         }</b></div>
         <div>Durasi: <b>${summary.duration_minutes ?? "-"} menit</b></div>
       </div>
       <table class="fw-detail-table">
         <thead>
-          <tr><th>Waktu</th><th>Sensor</th><th>A</th><th>B</th><th>C</th><th>Status</th></tr>
+          <tr><th>Waktu</th><th>Sensor</th><th>A</th><th>B</th><th>C</th><th>Skor Fuzzy</th><th>Status</th></tr>
         </thead>
-        <tbody>${rowsHtml || `<tr><td colspan="6">Belum ada data pembacaan.</td></tr>`}</tbody>
+        <tbody>${rowsHtml || `<tr><td colspan="7">Belum ada data pembacaan.</td></tr>`}</tbody>
       </table>
     `;
     }
@@ -455,6 +464,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
           <td>${r.standard_a}</td>
           <td>${r.min_b}</td>
           <td>${r.max_c}</td>
+          <td>${fmtFuzzy(r.fuzzy_score)}</td>
           <td>${r.status}</td>
         </tr>`
             )
@@ -464,7 +474,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
       <p>${readings.length} data ditemukan (maks. 500 ditampilkan).</p>
       <table class="fw-detail-table">
         <thead>
-          <tr><th>Waktu</th><th>Sesi</th><th>Sensor</th><th>A</th><th>B</th><th>C</th><th>Status</th></tr>
+          <tr><th>Waktu</th><th>Sesi</th><th>Sensor</th><th>A</th><th>B</th><th>C</th><th>Skor Fuzzy</th><th>Status</th></tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
       </table>
