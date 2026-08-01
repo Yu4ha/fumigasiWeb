@@ -34,13 +34,20 @@ export function mountApp(
     const tabButtons = root.querySelectorAll<HTMLButtonElement>(".fw-tab");
     const content = root.querySelector<HTMLDivElement>("#fw-tab-content")!;
 
+    let activeCleanup: (() => void) | null = null;
+
     function renderTab(tab: TabKey): void {
         tabButtons.forEach((btn) => {
             btn.classList.toggle("is-active", btn.dataset.tab === tab);
         });
 
+        if (activeCleanup) {
+            activeCleanup();
+            activeCleanup = null;
+        }
+
         if (tab === "dashboard") {
-            mountDashboard(content, connection, mode);
+            activeCleanup = mountDashboard(content, connection, mode);
         } else {
             mountFumigationReport(content, apiBase);
         }

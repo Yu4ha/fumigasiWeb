@@ -32,7 +32,7 @@ function fmt(value: number | null, digits: number, unit: string): string {
   return value === null ? "N/A" : `${value.toFixed(digits)} ${unit}`;
 }
 
-export function mountDashboard(root: HTMLElement, connection: DeviceDataConnection, mode: DeviceMode) {
+export function mountDashboard(root: HTMLElement, connection: DeviceDataConnection, mode: DeviceMode): () => void {
   root.innerHTML = `
     <div class="fw-dash">
       <header class="fw-titlebar">
@@ -164,5 +164,5 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
       `fw-led fw-led-red ${snap.status === "KRITIS" ? "is-lit" : ""}`;
   }
 
-  connection.subscribe(render);
+  return connection.subscribe(render);
 }

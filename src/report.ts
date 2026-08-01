@@ -63,7 +63,7 @@ function fmtDate(iso: string | null): string {
 }
 
 function fmtFuzzy(score: number | null): string {
-    return score !== null ? score.toFixed(1) : "-";
+    return score !== null ? Number(score).toFixed(1) : "-";
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string): HTMLElementTagNameMap[K] {
