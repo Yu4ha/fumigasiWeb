@@ -3,14 +3,14 @@ import type { DeviceDataConnection, DeviceMode } from "./deviceData";
 
 const STATUS_LABEL: Record<AirStatus, string> = {
   AMAN: "AMAN",
-  PERLU_TOPUP: "PERLU TOP-UP",
+  PERLU_TOPUP: "PERLU PENAMBAHAN GAS",
   KRITIS: "KRITIS",
   DISTRIBUTING: "DISTRIBUSI GAS",
 };
 
 const STATUS_DESC: Record<AirStatus, string> = {
   AMAN: "Konsentrasi gas berada di antara batas minimum (B) dan maksimum (C)",
-  PERLU_TOPUP: "Konsentrasi gas di bawah batas minimum (B) - perlu top-up gas",
+  PERLU_TOPUP: "Konsentrasi gas di bawah batas minimum (B) - PERLU PENAMBAHAN GAS",
   KRITIS: "Konsentrasi gas melewati batas maksimum (C) - kadar gas kelewat banyak",
   DISTRIBUTING: "Menunggu gas mencapai Start Point sebelum fase fumigasi dimulai",
 };

@@ -142,7 +142,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
             <div>Volume container: <b id="fw-computed-volume">-</b> m³</div>
             <div>Total gas dibutuhkan: <b id="fw-computed-gas">-</b> gram</div>
             <div class="fw-computed-hint">
-              Dosis (g/m³) dan durasi dipakai sebagai acuan ambang batas AMAN/PERLU TOP-UP/KRITIS.
+              Dosis (g/m³) dan durasi dipakai sebagai acuan ambang batas AMAN/PERLU PENAMBAHAN GAS/KRITIS.
               Total gas (gram) cuma info bantu takaran fisik, dihitung otomatis dari Dosis × Volume.
             </div>
           </div>
@@ -177,7 +177,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
               <option value="">Semua status</option>
               <option value="DISTRIBUTING">DISTRIBUSI GAS</option>
               <option value="AMAN">AMAN</option>
-              <option value="PERLU_TOPUP">PERLU TOP-UP</option>
+              <option value="PERLU_TOPUP">PERLU PENAMBAHAN GAS</option>
               <option value="KRITIS">KRITIS</option>
             </select>
           </div>
@@ -397,7 +397,7 @@ export function mountFumigationReport(root: HTMLElement, apiBase: string): void 
       <div class="fw-detail-summary">
         <div>Total pembacaan: <b>${summary.total_readings}</b></div>
         <div>Fase distribusi: <b>${summary.count_distributing}</b></div>
-        <div>AMAN: <b>${summary.count_aman}</b> · PERLU TOP-UP: <b>${summary.count_perlu_topup}</b> · KRITIS: <b>${summary.count_kritis}</b></div>
+        <div>AMAN: <b>${summary.count_aman}</b> · PERLU PENAMBAHAN GAS: <b>${summary.count_perlu_topup}</b> · KRITIS: <b>${summary.count_kritis}</b></div>
         <div>Nilai sensor (fase fumigasi) min/max/rata-rata: <b>${summary.min_gas ?? "-"} / ${summary.max_gas ?? "-"} / ${
             summary.avg_gas !== null ? summary.avg_gas.toFixed(2) : "-"
         }</b></div>
