@@ -4,7 +4,7 @@ export interface BMEReading {
   tekanan: number | null;
 }
 
-export type AirStatus = "AMAN" | "PERLU_TOPUP" | "KRITIS" | "DISTRIBUTING";
+export type AirStatus = "AMAN" | "PERLU_PENAMBAHAN_GAS" | "KRITIS" | "DISTRIBUTING";
 
 export interface DeviceSnapshot {
   timestamp: Date;
@@ -67,7 +67,7 @@ export function simulateStatus(
 
   let status: AirStatus;
   if (skor >= 65) status = "KRITIS";
-  else if (skor <= 35) status = "PERLU_TOPUP";
+  else if (skor <= 35) status = "PERLU_PENAMBAHAN_GAS";
   else status = "AMAN";
 
   return { status, fuzzyScore: skor };

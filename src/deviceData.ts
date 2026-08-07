@@ -31,7 +31,7 @@ interface ApiIngestData {
   minB: number;
   maxC: number;
   fuzzyScore: number | null;
-  status: "AMAN" | "PERLU_TOPUP" | "KRITIS" | "DISTRIBUTING";
+  status: "AMAN" | "PERLU_PENAMBAHAN_GAS" | "KRITIS" | "DISTRIBUTING";
   buzzerActive: boolean;
 }
 

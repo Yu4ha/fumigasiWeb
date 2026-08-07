@@ -3,14 +3,14 @@ import type { DeviceDataConnection, DeviceMode } from "./deviceData";
 
 const STATUS_LABEL: Record<AirStatus, string> = {
   AMAN: "AMAN",
-  PERLU_TOPUP: "PERLU PENAMBAHAN GAS",
+  PERLU_PENAMBAHAN_GAS: "PERLU PENAMBAHAN GAS",
   KRITIS: "KRITIS",
   DISTRIBUTING: "DISTRIBUSI GAS",
 };
 
 const STATUS_DESC: Record<AirStatus, string> = {
   AMAN: "Konsentrasi gas berada di antara batas minimum (B) dan maksimum (C)",
-  PERLU_TOPUP: "Konsentrasi gas di bawah batas minimum (B) - PERLU PENAMBAHAN GAS",
+  PERLU_PENAMBAHAN_GAS: "Konsentrasi gas di bawah batas minimum (B) - perlu penambahan gas",
   KRITIS: "Konsentrasi gas melewati batas maksimum (C) - kadar gas kelewat banyak",
   DISTRIBUTING: "Menunggu gas mencapai Start Point sebelum fase fumigasi dimulai",
 };
@@ -159,7 +159,7 @@ export function mountDashboard(root: HTMLElement, connection: DeviceDataConnecti
     root.querySelector("#fw-led-green")!.className =
       `fw-led fw-led-green ${snap.status === "AMAN" ? "is-lit" : ""}`;
     root.querySelector("#fw-led-amber")!.className =
-      `fw-led fw-led-amber ${snap.status === "PERLU_TOPUP" || snap.status === "DISTRIBUTING" ? "is-lit" : ""}`;
+      `fw-led fw-led-amber ${snap.status === "PERLU_PENAMBAHAN_GAS" || snap.status === "DISTRIBUTING" ? "is-lit" : ""}`;
     root.querySelector("#fw-led-red")!.className =
       `fw-led fw-led-red ${snap.status === "KRITIS" ? "is-lit" : ""}`;
   }
